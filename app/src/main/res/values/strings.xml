@@ -1,0 +1,50 @@
+<resources>
+    <string name="app_name">Lostandfound</string>
+    <string name="app_title">Calasiao Lost &amp; Found</string>
+    <string name="login_title">Login</string>
+    <string name="create_account_title">Create Account</string>
+    <string name="email_phone_label">Email Address or Phone Number</string>
+    <string name="password_label">Password</string>
+    <string name="enter_sms_code">Enter SMS Code</string>
+    <string name="verify_code">Verify Code</string>
+    <string name="login_send_code">Login / Send Code</string>
+    <string name="sign_up_send_code">Sign Up / Send Code</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="toggle_to_signup">Don\'t have an account? Sign Up</string>
+    <string name="toggle_to_login">Already have an account? Login</string>
+    <string name="error_empty_input">Please enter email or phone</string>
+    <string name="error_invalid_format">Invalid email or phone format</string>
+    <string name="error_empty_password">Please enter password</string>
+    <string name="error_invalid_code">Invalid code</string>
+    <string name="error_google_sign_in">Google Sign In Failed: %s</string>
+    <string name="error_login_failed">Login failed: %s</string>
+    <string name="error_registration_failed">Registration failed: %s</string>
+    <string name="error_verification_failed">Verification failed: %s</string>
+    <string name="default_web_client_id">806374511294-rlsgdakdi6tus7drbbfjbipu724lrcfm.apps.googleusercontent.com</string>
+    
+    <!-- Report Lost Item Screen -->
+    <string name="report_lost_item_title">Report Lost Item</string>
+    <string name="item_name_label">Item Name</string>
+    <string name="description_label">Description</string>
+    <string name="location_label">Location</string>
+    <string name="category_label">Category</string>
+    <string name="date_lost_label">Date Lost</string>
+    <string name="report_submitted">Report Submitted!</string>
+    <string name="report_submission_error">Error submitting report</string>
+    <string name="potential_matches_title">Potential Matches Found!</string>
+    <string name="potential_matches_message">We found items that look similar to what you lost. Is one of these yours?</string>
+    <string name="match_percentage">%d%% Match</string>
+    <string name="message_finder_button">Message Finder</string>
+    <string name="no_contact_info">No Contact Info Available</string>
+    <string name="none_of_these_mine_button">None of these are mine, Submit Report</string>
+    <string name="cancel_button">Cancel</string>
+    <string name="ok_button">OK</string>
+    <string name="back_content_description">Back</string>
+    <string name="select_date_content_description">Select Date</string>
+    <string name="checking_matches">Checking for matches...</string>
+    <string name="submitting">Submitting...</string>
+    <string name="submit_report_button">Submit Report</string>
+    <string name="email_subject_inquiry">Found Item Inquiry: %s</string>
+    <string name="email_body_inquiry">Hello, I think the %s you found matches what I lost. Please contact me.</string>
+    <string name="no_email_app_error">No email app found</string>
+</resources>
