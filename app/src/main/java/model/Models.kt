@@ -1,33 +1,35 @@
-package com.example.lostandfound
+package com.example.lostandfound.model
 
 import java.util.Date
 
-// --- DATA MODELS ---
+// --- UPDATED DATA MODELS ---
 data class FoundItem(
     val id: String = "",
-    val userId: String = "", // User who reported it
-    val email: String = "", // Contact email
+    val userId: String = "",
+    val email: String = "",
     val name: String = "",
     val description: String = "",
     val location: String = "",
     val latitude: Double? = null,
     val longitude: Double? = null,
     val category: String = "",
-    val dateFound: Date = Date(),
+    val dateFound: Date = Date(), // Already correct
     val dateFoundText: String = "",
-    val status: String = "Found" // Found, Claimed
+    val imageUrl: String = "",    // Added for photo support
+    val status: String = "Found"
 )
 
 data class LostItem(
     val id: String = "",
-    val userId: String = "", // User who reported it
-    val email: String = "", // Contact email
+    val userId: String = "",
+    val email: String = "",
     val name: String = "",
     val description: String = "",
     val location: String = "",
     val latitude: Double? = null,
     val longitude: Double? = null,
     val category: String = "",
-    val dateLost: String = "",
-    val status: String = "Lost" // Lost, Found
+    val dateLost: Date = Date(),  // CHANGED: String -> Date
+    val imageUrl: String = "",    // Added for photo support
+    val status: String = "Lost"
 )

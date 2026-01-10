@@ -1,14 +1,16 @@
 package com.example.lostandfound.screens
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.launch
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,18 +34,38 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.lostandfound.FoundItem
-import com.example.lostandfound.LostItem
-import com.example.lostandfound.findLostMatches
+import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.model.LostItem
+import com.example.lostandfound.utils.findLostMatches
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+// Function to create a temporary image file uri
+private fun createImageUri(context: Context): Uri {
+    val imageFile = File.createTempFile(
+        "JPEG_${System.currentTimeMillis()}_",
+        ".jpg",
+        context.cacheDir
+    )
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.provider", // authority
+        imageFile
+    )
+}
+
 
 // --- SCREEN 3: REPORT FOUND ITEM FORM (Data Entry) ---
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +75,7 @@ fun ReportItemScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     var itemName by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
@@ -60,8 +83,10 @@ fun ReportItemScreen(navController: NavController) {
     var longitude by remember { mutableStateOf<Double?>(null) }
     var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
-    var dateFound by remember { mutableStateOf("") }
-    var capturedImage by remember { mutableStateOf<Bitmap?>(null) }
+    var dateFound by remember { mutableStateOf<Date>(Date()) }
+    var dateFoundText by remember { mutableStateOf("") }
+    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var tempImageUri by remember { mutableStateOf<Uri?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
     var isCheckingMatches by remember { mutableStateOf(false) }
     var isFetchingLocation by remember { mutableStateOf(false) }
@@ -81,10 +106,10 @@ fun ReportItemScreen(navController: NavController) {
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null) {
-            capturedImage = bitmap
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            capturedImageUri = tempImageUri
         }
     }
 
@@ -92,7 +117,8 @@ fun ReportItemScreen(navController: NavController) {
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            cameraLauncher.launch()
+            tempImageUri = createImageUri(context)
+            cameraLauncher.launch(tempImageUri)
         } else {
             Toast.makeText(context, "Camera permission needed to take photos", Toast.LENGTH_SHORT).show()
         }
@@ -101,7 +127,7 @@ fun ReportItemScreen(navController: NavController) {
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || 
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
             // Permission granted, fetch location
             isFetchingLocation = true
@@ -145,10 +171,11 @@ fun ReportItemScreen(navController: NavController) {
             longitude = longitude,
             description = description,
             category = category,
-            dateFoundText = dateFound, // Map UI text to new text field
+            dateFound = dateFound,
+            dateFoundText = dateFoundText,
             status = "Found"
         )
-        
+
         // Note: Image uploading requires Firebase Storage.
 
         db.collection("found_items")
@@ -195,7 +222,7 @@ fun ReportItemScreen(navController: NavController) {
                                     Text(item.description, style = MaterialTheme.typography.bodySmall)
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("Date Lost: ${item.dateLost}", style = MaterialTheme.typography.labelSmall)
-                                    
+
                                     Spacer(modifier = Modifier.height(8.dp))
                                     if (item.email.isNotBlank()) {
                                         Button(onClick = {
@@ -243,7 +270,7 @@ fun ReportItemScreen(navController: NavController) {
             }
         )
     }
-    
+
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -252,7 +279,8 @@ fun ReportItemScreen(navController: NavController) {
                     datePickerState.selectedDateMillis?.let { millis ->
                         val date = Date(millis)
                         val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                        dateFound = format.format(date)
+                        dateFoundText = format.format(date)
+                        dateFound = date
                     }
                     showDatePicker = false
                 }) {
@@ -288,7 +316,7 @@ fun ReportItemScreen(navController: NavController) {
             .fillMaxSize()
             .padding(paddingValues)
             .padding(16.dp)) {
-            
+
             // Camera Box
             Box(
                 modifier = Modifier
@@ -296,14 +324,28 @@ fun ReportItemScreen(navController: NavController) {
                     .height(200.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (capturedImage != null) {
+                if (capturedImageUri != null) {
+                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, capturedImageUri!!))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, capturedImageUri!!)
+                    }
                     Image(
-                        bitmap = capturedImage!!.asImageBitmap(),
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Captured Image",
                         modifier = Modifier.fillMaxSize()
                     )
                     Button(
-                        onClick = { cameraLauncher.launch() },
+                        onClick = {
+                            val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                            if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                                tempImageUri = createImageUri(context)
+                                cameraLauncher.launch(tempImageUri)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
                     ) {
                         Text("Retake")
@@ -312,7 +354,8 @@ fun ReportItemScreen(navController: NavController) {
                     Button(onClick = {
                         val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
                         if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                            cameraLauncher.launch()
+                            tempImageUri = createImageUri(context)
+                            cameraLauncher.launch(tempImageUri)
                         } else {
                             permissionLauncher.launch(Manifest.permission.CAMERA)
                         }
@@ -326,19 +369,19 @@ fun ReportItemScreen(navController: NavController) {
 
             OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text("Item Name") }, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Location Field with GPS Button
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
-                    value = location, 
-                    onValueChange = { location = it }, 
-                    label = { Text("Location") }, 
+                    value = location,
+                    onValueChange = { location = it },
+                    label = { Text("Location") },
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = {
                     val permissionCheckFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     val permissionCheckCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-                    
+
                     if (permissionCheckFine == PackageManager.PERMISSION_GRANTED || permissionCheckCoarse == PackageManager.PERMISSION_GRANTED) {
                         // Permission granted, fetch location
                         isFetchingLocation = true
@@ -375,11 +418,11 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Category Dropdown
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -397,7 +440,7 @@ fun ReportItemScreen(navController: NavController) {
                     },
                     readOnly = true // Make it read-only so keyboard doesn't pop up
                 )
-                
+
                 // Transparent clickable surface to cover the text field for dropdown trigger
                 Box(
                     modifier = Modifier
@@ -422,14 +465,14 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Date Picker Field
             OutlinedTextField(
-                value = dateFound, 
-                onValueChange = {}, 
-                label = { Text("Date Found") }, 
+                value = dateFoundText,
+                onValueChange = {},
+                label = { Text("Date Found") },
                 modifier = Modifier.fillMaxWidth(),
                 readOnly = true,
                 trailingIcon = {
@@ -438,7 +481,7 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
             )
-            
+
             Spacer(modifier = Modifier.height(24.dp))
 
             if (isSubmitting || isCheckingMatches) {
@@ -455,31 +498,36 @@ fun ReportItemScreen(navController: NavController) {
                             return@Button
                         }
 
-                        isCheckingMatches = true
-                        
-                        // 1. Check against Lost Items
-                        db.collection("lost_items").get()
-                            .addOnSuccessListener { result ->
-                                val allLostItems = result.toObjects(LostItem::class.java)
-                                
-                                // 2. Run Algorithm (Reverse check)
-                                val matches = findLostMatches(itemName, description, latitude, longitude, allLostItems)
-                                
-                                isCheckingMatches = false
-                                
-                                if (matches.isNotEmpty()) {
-                                    // 3a. Show Matches
-                                    potentialOwners = matches
-                                    showOwnerDialog = true
-                                } else {
-                                    // 3b. No Matches -> Save directly
+                        coroutineScope.launch {
+                            isCheckingMatches = true
+                            // 1. Check against Lost Items
+                            db.collection("lost_items").get()
+                                .addOnSuccessListener { result ->
+                                    coroutineScope.launch {
+                                        val allLostItems = result.toObjects(LostItem::class.java)
+
+                                        // 2. Run Algorithm (Reverse check)
+                                        val matches = withContext(Dispatchers.Default) {
+                                            findLostMatches(itemName, description, latitude, longitude, allLostItems)
+                                        }
+
+                                        isCheckingMatches = false
+
+                                        if (matches.isNotEmpty()) {
+                                            // 3a. Show Matches
+                                            potentialOwners = matches
+                                            showOwnerDialog = true
+                                        } else {
+                                            // 3b. No Matches -> Save directly
+                                            saveToFirestore()
+                                        }
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    isCheckingMatches = false
                                     saveToFirestore()
                                 }
-                            }
-                            .addOnFailureListener {
-                                isCheckingMatches = false
-                                saveToFirestore()
-                            }
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

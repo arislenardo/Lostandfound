@@ -21,7 +21,8 @@
     <string name="error_registration_failed">Registration failed: %s</string>
     <string name="error_verification_failed">Verification failed: %s</string>
     <string name="default_web_client_id">806374511294-rlsgdakdi6tus7drbbfjbipu724lrcfm.apps.googleusercontent.com</string>
-    
+    <string name="confirm_password_label">Confirm Password</string>
+    <string name="error_password_mismatch">Passwords do not match</string>
     <!-- Report Lost Item Screen -->
     <string name="report_lost_item_title">Report Lost Item</string>
     <string name="item_name_label">Item Name</string>

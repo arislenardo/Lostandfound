@@ -2,12 +2,9 @@ package com.example.lostandfound.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -17,11 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.lostandfound.AuthManager
+import com.example.lostandfound.data.AuthManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.lostandfound.FoundItem
-import com.example.lostandfound.seedDatabase
+import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.utils.seedDatabase
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,11 +29,25 @@ fun HomeScreen(navController: NavController) {
     var showResolvedDialog by remember { mutableStateOf(false) }
     var itemToResolve by remember { mutableStateOf<FoundItem?>(null) }
     val currentUser = auth.currentUser
-    val isAdmin = AuthManager.isCurrentUserAdmin()
+    // Checks immediately, but updates UI if the status changes
+    var isAdmin by remember { mutableStateOf(AuthManager.isCurrentUserAdmin()) }
+
+// Re-check automatically when the screen launches to catch any updates
+    LaunchedEffect(Unit) {
+        // Small delay to allow the fetch in MainActivity to complete
+        // (A proper fix involves MutableStateFlow in AuthManager, but this works for Capstone)
+        kotlinx.coroutines.delay(1000)
+        isAdmin = AuthManager.isCurrentUserAdmin()
+    }
+
+    // EXTRACT FIRST NAME
+    // 1. Get full name (or fallback to email/default)
+    val displayName = currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User"
+    // 2. Take substring before first space to get "First Name"
+    val firstName = displayName.split(" ").firstOrNull() ?: displayName
 
     fun markAsResolved(item: FoundItem) {
         val db = FirebaseFirestore.getInstance()
-        // Note: This assumes the item has a valid Firestore document ID.
         db.collection("found_items").document(item.id)
             .update("status", "Resolved")
             .addOnSuccessListener {
@@ -64,7 +75,7 @@ fun HomeScreen(navController: NavController) {
             }
         )
     }
-    
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -100,22 +111,27 @@ fun HomeScreen(navController: NavController) {
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Welcome, ${if (isAdmin) "Admin" else "Resident"}", style = MaterialTheme.typography.headlineSmall)
+            // UPDATED WELCOME TEXT
+            Text(
+                text = "Welcome, ${if (isAdmin) "Admin $firstName" else "Resident $firstName"}",
+                style = MaterialTheme.typography.headlineSmall
+            )
+
             Text("What would you like to do?", style = MaterialTheme.typography.bodyMedium)
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Action Buttons
             ActionCard(
-                title = "I Lost Something", 
-                description = "Search for items that have been found by others.", 
+                title = "I Lost Something",
+                description = "Search for items that have been found by others.",
                 icon = Icons.Default.Search,
                 onClick = { navController.navigate("lost") }
             )
             Spacer(modifier = Modifier.height(16.dp))
             ActionCard(
-                title = "I Found Something", 
-                description = "Report an item that you have found to help its owner.", 
+                title = "I Found Something",
+                description = "Report an item that you have found to help its owner.",
                 icon = Icons.Default.Add,
                 onClick = { navController.navigate("report") }
             )

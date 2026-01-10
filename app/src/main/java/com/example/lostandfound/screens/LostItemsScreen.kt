@@ -12,8 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.lostandfound.FoundItem
-import com.example.lostandfound.findPotentialMatches
+import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.utils.findPotentialMatches
 
 // --- SCREEN 4: SEARCH LOST ITEMS (Real Search) ---
 @Composable
@@ -23,8 +23,11 @@ fun LostItemsScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
 
     // Initial load
+    // Initial load
     LaunchedEffect(Unit) {
         db.collection("found_items")
+            .orderBy("dateFound", com.google.firebase.firestore.Query.Direction.DESCENDING) // Show newest first
+            .limit(100) // <--- ADD THIS: Prevents downloading 5,000 items and crashing
             .get()
             .addOnSuccessListener { result ->
                 foundItems = result.toObjects(FoundItem::class.java)
@@ -39,8 +42,8 @@ fun LostItemsScreen(navController: NavController) {
 
         OutlinedTextField(
             value = searchQuery,
-            onValueChange = { 
-                searchQuery = it 
+            onValueChange = {
+                searchQuery = it
             },
             label = { Text("Search for your item...") },
             modifier = Modifier.fillMaxWidth(),

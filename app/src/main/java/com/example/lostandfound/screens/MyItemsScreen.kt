@@ -11,8 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.lostandfound.AuthManager
-import com.example.lostandfound.LostItem
+import com.example.lostandfound.data.AuthManager
+import com.example.lostandfound.model.LostItem
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 
@@ -29,6 +29,9 @@ fun MyItemsScreen(navController: NavController) {
 
         if (!isAdmin) {
             currentUserId?.let {
+                // This query will cause a crash if you don't have a composite index.
+                // To fix, run the app, trigger this query, and look in Logcat for an error
+                // that contains a link to create the index in the Firebase Console.
                 query = query.whereEqualTo("userId", it)
             }
         }

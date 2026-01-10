@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -12,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.example.lostandfound.screens.*
+import com.example.lostandfound.data.AuthManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +33,10 @@ fun LostAndFoundApp() {
     val auth = FirebaseAuth.getInstance()
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
+
+    LaunchedEffect(Unit) {
+        AuthManager.fetchAdminUids()
+    }
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable("login") { LoginScreen(navController) }

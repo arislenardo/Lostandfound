@@ -1,12 +1,17 @@
 package com.example.lostandfound.screens
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -35,13 +41,20 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.lostandfound.FoundItem
-import com.example.lostandfound.LostItem
+import com.google.firebase.storage.FirebaseStorage
+import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.R
-import com.example.lostandfound.findPotentialMatches
+import com.example.lostandfound.utils.findPotentialMatches
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 // --- SCREEN 5: REPORT LOST ITEM FORM (With Auto-Match Algorithm) ---
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +64,8 @@ fun ReportLostItemScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val coroutineScope = rememberCoroutineScope()
+    val db = FirebaseFirestore.getInstance()
 
     var itemName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -59,14 +74,16 @@ fun ReportLostItemScreen(navController: NavController) {
     var longitude by remember { mutableStateOf<Double?>(null) }
     var category by remember { mutableStateOf("") }
     var dateLost by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
     var isCheckingMatches by remember { mutableStateOf(false) }
     var isFetchingLocation by remember { mutableStateOf(false) }
-    
+    var showNoImageWarning by remember { mutableStateOf(false) }
+
     // Date Picker State
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
-    
+
     // Category Dropdown State
     var expandedCategory by remember { mutableStateOf(false) }
     val categories = listOf("Electronics", "Clothing", "Accessories", "Documents", "Keys", "Others")
@@ -77,12 +94,16 @@ fun ReportLostItemScreen(navController: NavController) {
     var showMatchesDialog by remember { mutableStateOf(false) }
     var potentialMatches by remember { mutableStateOf<List<Pair<FoundItem, Double>>>(emptyList()) }
 
-    val db = FirebaseFirestore.getInstance()
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || 
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
             // Permission granted, fetch location
             isFetchingLocation = true
@@ -114,8 +135,17 @@ fun ReportLostItemScreen(navController: NavController) {
     }
 
     // Helper function to finalize submission
-    fun saveToFirestore() {
+    fun saveToFirestore(imageUrl: String?) {
         isSubmitting = true
+
+        // Convert the text string back to a Date object, or use current time as fallback
+        val dateObj = try {
+            val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            if (dateLost.isNotBlank()) format.parse(dateLost) else Date()
+        } catch (e: Exception) {
+            Date()
+        }
+
         val newItem = LostItem(
             userId = currentUser?.uid ?: "",
             email = currentUser?.email ?: "",
@@ -125,7 +155,8 @@ fun ReportLostItemScreen(navController: NavController) {
             latitude = latitude,
             longitude = longitude,
             category = category,
-            dateLost = dateLost,
+            dateLost = dateObj ?: Date(),
+            imageUrl = imageUrl ?: "",
             status = "Lost"
         )
 
@@ -133,15 +164,60 @@ fun ReportLostItemScreen(navController: NavController) {
             .add(newItem)
             .addOnSuccessListener {
                 isSubmitting = false
-                Toast.makeText(context, context.getString(R.string.report_submitted), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Report Submitted", Toast.LENGTH_SHORT).show()
                 navController.navigate("home") {
                     popUpTo("home") { inclusive = true }
                 }
             }
             .addOnFailureListener {
                 isSubmitting = false
-                Toast.makeText(context, context.getString(R.string.report_submission_error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Submission Error", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    fun finalizeReportUpload() {
+        coroutineScope.launch {
+            isSubmitting = true
+            val imageUrl = selectedImageUri?.let { uploadImageToStorage(it) }
+            saveToFirestore(imageUrl)
+        }
+    }
+
+    fun startMatchingAndUpload(context: Context, db: FirebaseFirestore, scope: CoroutineScope) {
+        scope.launch {
+            isCheckingMatches = true
+
+            db.collection("found_items").get()
+                .addOnSuccessListener { result ->
+                    // FIX: Explicitly tell Firebase to use FoundItem class
+                    val allFoundItems = result.toObjects(FoundItem::class.java)
+
+                    scope.launch {
+                        // FIX: This calls the specific function in MatchUtils
+                        val matches = withContext(Dispatchers.Default) {
+                            findPotentialMatches(
+                                targetName = itemName,
+                                targetDesc = description,
+                                targetLat = latitude,
+                                targetLon = longitude,
+                                itemsInDb = allFoundItems
+                            )
+                        }
+
+                        isCheckingMatches = false
+                        if (matches.isNotEmpty()) {
+                            potentialMatches = matches
+                            showMatchesDialog = true
+                        } else {
+                            finalizeReportUpload()
+                        }
+                    }
+                }
+                .addOnFailureListener {
+                    isCheckingMatches = false
+                    finalizeReportUpload()
+                }
+        }
     }
 
     // MATCHES DIALOG
@@ -173,7 +249,7 @@ fun ReportLostItemScreen(navController: NavController) {
                                     }
                                     Text(stringResource(R.string.location_label) + ": ${item.location}", style = MaterialTheme.typography.bodyMedium)
                                     Text(item.description, style = MaterialTheme.typography.bodySmall)
-                                    
+
                                     Spacer(modifier = Modifier.height(8.dp))
                                     if (item.email.isNotBlank()) {
                                         val emailSubject = stringResource(R.string.email_subject_inquiry, item.name)
@@ -212,7 +288,7 @@ fun ReportLostItemScreen(navController: NavController) {
                 TextButton(onClick = {
                     // User confirms none of these are theirs, proceed to save
                     showMatchesDialog = false
-                    saveToFirestore()
+                    finalizeReportUpload()
                 }) {
                     Text(stringResource(R.string.none_of_these_mine_button))
                 }
@@ -224,7 +300,24 @@ fun ReportLostItemScreen(navController: NavController) {
             }
         )
     }
-    
+
+    if (showNoImageWarning) {
+        AlertDialog(
+            onDismissRequest = { showNoImageWarning = false },
+            title = { Text("No Photo Attached") },
+            text = { Text("Without a photo, our Smart AI cannot automatically match this to found items. Proceed anyway?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showNoImageWarning = false
+                    startMatchingAndUpload(context, db, coroutineScope)
+                }) { Text("Yes, Proceed") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoImageWarning = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -271,23 +364,54 @@ fun ReportLostItemScreen(navController: NavController) {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selectedImageUri != null) {
+                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, selectedImageUri!!))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, selectedImageUri!!)
+                    }
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Selected Image",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Button(
+                        onClick = { imagePickerLauncher.launch("image/*") },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                    ) {
+                        Text("Change Photo")
+                    }
+                } else {
+                    Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+                        Text("Select Photo")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text(stringResource(R.string.item_name_label)) }, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(stringResource(R.string.description_label)) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Location Field with GPS Button
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
-                    value = location, 
-                    onValueChange = { location = it }, 
-                    label = { Text(stringResource(R.string.location_label)) }, 
+                    value = location,
+                    onValueChange = { location = it },
+                    label = { Text(stringResource(R.string.location_label)) },
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = {
                     val permissionCheckFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     val permissionCheckCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-                    
+
                     if (permissionCheckFine == PackageManager.PERMISSION_GRANTED || permissionCheckCoarse == PackageManager.PERMISSION_GRANTED) {
                         // Permission granted, fetch location
                         isFetchingLocation = true
@@ -324,9 +448,9 @@ fun ReportLostItemScreen(navController: NavController) {
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Category Dropdown
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -344,7 +468,7 @@ fun ReportLostItemScreen(navController: NavController) {
                     },
                     readOnly = true // Make it read-only so keyboard doesn't pop up
                 )
-                
+
                 // Transparent clickable surface to cover the text field for dropdown trigger
                 Box(
                     modifier = Modifier
@@ -369,14 +493,14 @@ fun ReportLostItemScreen(navController: NavController) {
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Date Picker Field
             OutlinedTextField(
-                value = dateLost, 
-                onValueChange = {}, 
-                label = { Text(stringResource(R.string.date_lost_label)) }, 
+                value = dateLost,
+                onValueChange = {},
+                label = { Text(stringResource(R.string.date_lost_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 readOnly = true,
                 trailingIcon = {
@@ -385,7 +509,7 @@ fun ReportLostItemScreen(navController: NavController) {
                     }
                 }
             )
-            
+
             Spacer(modifier = Modifier.height(24.dp))
 
             if (isSubmitting || isCheckingMatches) {
@@ -397,34 +521,16 @@ fun ReportLostItemScreen(navController: NavController) {
             } else {
                 Button(
                     onClick = {
-                        if (itemName.isBlank()) return@Button
-                        
-                        isCheckingMatches = true
-                        
-                        // 1. Get all found items
-                        db.collection("found_items").get()
-                            .addOnSuccessListener { result ->
-                                val allFoundItems = result.toObjects(FoundItem::class.java)
-                                
-                                // 2. Run Algorithm
-                                val matches = findPotentialMatches(itemName, description, latitude, longitude, allFoundItems)
-                                
-                                isCheckingMatches = false
-                                
-                                if (matches.isNotEmpty()) {
-                                    // 3a. Show Matches
-                                    potentialMatches = matches
-                                    showMatchesDialog = true
-                                } else {
-                                    // 3b. No Matches -> Save directly
-                                    saveToFirestore()
-                                }
-                            }
-                            .addOnFailureListener {
-                                // Fallback if checking fails
-                                isCheckingMatches = false
-                                saveToFirestore()
-                            }
+                        if (itemName.isBlank()) {
+                            Toast.makeText(context, "Please enter an item name", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        if (selectedImageUri == null) {
+                            showNoImageWarning = true
+                        } else {
+                            startMatchingAndUpload(context, db, coroutineScope)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -432,5 +538,17 @@ fun ReportLostItemScreen(navController: NavController) {
                 }
             }
         }
+    }
+}
+
+suspend fun uploadImageToStorage(imageUri: Uri): String? {
+    val storageRef = FirebaseStorage.getInstance().reference
+    val imageRef = storageRef.child("images/${UUID.randomUUID()}")
+    return try {
+        imageRef.putFile(imageUri).await()
+        val downloadUrl = imageRef.downloadUrl.await()
+        downloadUrl.toString()
+    } catch (e: Exception) {
+        null
     }
 }

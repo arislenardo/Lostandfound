@@ -29,23 +29,28 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(navController: NavController) {
+    // Added 'name' state for Sign Up
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    // NEW: Confirm Password State
+    var confirmPassword by remember { mutableStateOf("") }
+
     var isErrorVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    
+
     // Toggles between Login and Register
     var isLoginMode by remember { mutableStateOf(true) }
     // Toggles between Email and Phone tabs
     var selectedTab by remember { mutableStateOf(0) } // 0 for Email, 1 for Phone
-    
+
     // Phone Auth State
     var verificationId by remember { mutableStateOf("") }
     var otpCode by remember { mutableStateOf("") }
     var isCodeSent by remember { mutableStateOf(false) }
-    
+
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
 
@@ -106,6 +111,18 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (selectedTab == 0) { // Email Tab
+                // NEW: Name Field (Only visible in Sign Up mode)
+                if (!isLoginMode) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Full Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it; isErrorVisible = false },
@@ -115,6 +132,7 @@ fun LoginScreen(navController: NavController) {
                     isError = isErrorVisible
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it; isErrorVisible = false },
@@ -123,6 +141,20 @@ fun LoginScreen(navController: NavController) {
                     modifier = Modifier.fillMaxWidth(),
                     isError = isErrorVisible
                 )
+
+                // NEW: Confirm Password Field (Only visible in Sign Up mode)
+                if (!isLoginMode) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it; isErrorVisible = false },
+                        label = { Text(stringResource(id = R.string.confirm_password_label)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = isErrorVisible
+                    )
+                }
+
             } else { // Phone Tab
                 OutlinedTextField(
                     value = phone,
@@ -184,6 +216,7 @@ fun LoginScreen(navController: NavController) {
                         // EMAIL LOGIN/REGISTER
                         if (email.isNotBlank() && password.isNotBlank()) {
                             if (isLoginMode) {
+                                // LOGIN
                                 auth.signInWithEmailAndPassword(email, password)
                                     .addOnSuccessListener {
                                         isLoading = false
@@ -195,16 +228,38 @@ fun LoginScreen(navController: NavController) {
                                         isErrorVisible = true
                                     }
                             } else {
-                                auth.createUserWithEmailAndPassword(email, password)
-                                    .addOnSuccessListener {
-                                        isLoading = false
-                                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
-                                    }
-                                    .addOnFailureListener { e ->
-                                        isLoading = false
-                                        errorMessage = context.getString(R.string.error_registration_failed, e.localizedMessage)
-                                        isErrorVisible = true
-                                    }
+                                // REGISTER
+                                if (name.isBlank()) {
+                                    isLoading = false
+                                    errorMessage = "Please enter your name."
+                                    isErrorVisible = true
+                                }
+                                // NEW: Check Passwords Match
+                                else if (password != confirmPassword) {
+                                    isLoading = false
+                                    errorMessage = context.getString(R.string.error_password_mismatch)
+                                    isErrorVisible = true
+                                }
+                                else {
+                                    auth.createUserWithEmailAndPassword(email, password)
+                                        .addOnSuccessListener { result ->
+                                            // UPDATE PROFILE WITH NAME
+                                            val profileUpdates = UserProfileChangeRequest.Builder()
+                                                .setDisplayName(name)
+                                                .build()
+
+                                            result.user?.updateProfile(profileUpdates)
+                                                ?.addOnCompleteListener {
+                                                    isLoading = false
+                                                    navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                }
+                                        }
+                                        .addOnFailureListener { e ->
+                                            isLoading = false
+                                            errorMessage = context.getString(R.string.error_registration_failed, e.localizedMessage)
+                                            isErrorVisible = true
+                                        }
+                                }
                             }
                         } else {
                             isLoading = false
@@ -221,7 +276,8 @@ fun LoginScreen(navController: NavController) {
                                 isErrorVisible = true
                                 return@Button
                             }
-                            val fullPhoneNumber = "+63$phone"
+                            val cleanPhone = if (phone.startsWith("0")) phone.substring(1) else phone
+                            val fullPhoneNumber = "+63$cleanPhone"
                             val options = PhoneAuthOptions.newBuilder(auth)
                                 .setPhoneNumber(fullPhoneNumber)
                                 .setTimeout(60L, TimeUnit.SECONDS)
@@ -262,7 +318,7 @@ fun LoginScreen(navController: NavController) {
                     else stringResource(id = R.string.create_account_title)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
 
             if (!isCodeSent) {
@@ -275,13 +331,15 @@ fun LoginScreen(navController: NavController) {
                 ) {
                     Text(stringResource(id = R.string.sign_in_google))
                 }
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                TextButton(onClick = { 
-                    isLoginMode = !isLoginMode 
-                    isErrorVisible = false 
+
+                TextButton(onClick = {
+                    isLoginMode = !isLoginMode
+                    isErrorVisible = false
                     errorMessage = ""
+                    // Clear fields when switching modes
+                    confirmPassword = ""
                 }) {
                     Text(
                         if (isLoginMode) stringResource(id = R.string.toggle_to_signup)
