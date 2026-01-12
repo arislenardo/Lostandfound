@@ -1,7 +1,5 @@
 package com.example.lostandfound.utils
 
-import com.example.lostandfound.model.FoundItem
-import com.example.lostandfound.model.LostItem
 import kotlin.math.*
 
 // --- ALGORITHM UTILS (JARO-WINKLER IMPLEMENTATION) ---

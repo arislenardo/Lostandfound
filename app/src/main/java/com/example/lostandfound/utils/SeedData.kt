@@ -6,7 +6,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Date
 import java.util.Calendar
 
-// Utility function to clear current data and seed random items
+// Utility function to clear current data and seed random items aka for bullshit.
 fun seedDatabase(onResult: (String) -> Unit) {
     val db = FirebaseFirestore.getInstance()
 

@@ -2,8 +2,6 @@ package com.example.lostandfound.utils
 
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
-import com.example.lostandfound.utils.JaroWinkler
-import com.example.lostandfound.utils.calculateDistanceKm
 import kotlin.math.*
 
 fun findPotentialMatches(
