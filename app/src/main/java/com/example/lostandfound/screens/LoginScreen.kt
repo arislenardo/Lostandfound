@@ -53,6 +53,7 @@ fun LoginScreen(navController: NavController) {
 
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope() // Added Scope
 
     // Google Sign In Setup
     val googleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -71,8 +72,11 @@ fun LoginScreen(navController: NavController) {
                 val credential = GoogleAuthProvider.getCredential(account.idToken, null)
                 auth.signInWithCredential(credential)
                     .addOnSuccessListener {
-                        isLoading = false
-                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                        scope.launch {
+                            AuthManager.refreshAdminStatus()
+                            isLoading = false
+                            navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                        }
                     }
                     .addOnFailureListener { e ->
                         isLoading = false
@@ -199,8 +203,11 @@ fun LoginScreen(navController: NavController) {
                             val credential = PhoneAuthProvider.getCredential(verificationId, otpCode)
                             auth.signInWithCredential(credential)
                                 .addOnSuccessListener {
-                                    isLoading = false
-                                    navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                    scope.launch {
+                                        AuthManager.refreshAdminStatus()
+                                        isLoading = false
+                                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                    }
                                 }
                                 .addOnFailureListener {
                                     isLoading = false
@@ -219,8 +226,11 @@ fun LoginScreen(navController: NavController) {
                                 // LOGIN
                                 auth.signInWithEmailAndPassword(email, password)
                                     .addOnSuccessListener {
-                                        isLoading = false
-                                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                        scope.launch {
+                                            AuthManager.refreshAdminStatus()
+                                            isLoading = false
+                                            navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                        }
                                     }
                                     .addOnFailureListener { e ->
                                         isLoading = false
@@ -250,8 +260,11 @@ fun LoginScreen(navController: NavController) {
 
                                             result.user?.updateProfile(profileUpdates)
                                                 ?.addOnCompleteListener {
-                                                    isLoading = false
-                                                    navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                    scope.launch {
+                                                        AuthManager.refreshAdminStatus()
+                                                        isLoading = false
+                                                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                    }
                                                 }
                                         }
                                         .addOnFailureListener { e ->
@@ -286,8 +299,11 @@ fun LoginScreen(navController: NavController) {
                                     override fun onVerificationCompleted(credential: PhoneAuthCredential) {
                                         auth.signInWithCredential(credential)
                                             .addOnSuccessListener {
-                                                isLoading = false
-                                                navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                scope.launch {
+                                                    AuthManager.refreshAdminStatus()
+                                                    isLoading = false
+                                                    navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                }
                                             }
                                     }
                                     override fun onVerificationFailed(e: FirebaseException) {

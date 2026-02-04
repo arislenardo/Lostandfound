@@ -28,11 +28,7 @@ fun findPotentialMatches(
         var finalScore = max(nameScore, max(descScore, queryInName))
 
         // 4. Geographic Weighting
-        if (targetLat != null && targetLon != null && item.latitude != null && item.longitude != null) {
-            val distanceKm = calculateDistanceKm(targetLat, targetLon, item.latitude, item.longitude)
-            if (distanceKm < 2.0) finalScore += 0.1  // Bonus for being very close
-            else if (distanceKm > 20.0) finalScore -= 0.2 // Penalty for being far
-        }
+        // 4. Geographic Weighting removed as requested
 
         finalScore = min(1.0, max(0.0, finalScore))
         item to finalScore
@@ -56,10 +52,9 @@ fun findLostMatches(
 
         var finalScore = max(nameScore, descScore)
 
-        if (targetLat != null && targetLon != null && item.latitude != null && item.longitude != null) {
-            val distanceKm = calculateDistanceKm(targetLat, targetLon, item.latitude, item.longitude)
-            if (distanceKm < 2.0) finalScore += 0.1
-        }
+        // 4. Geographic Weighting removed as requested
+
+        item to min(1.0, max(0.0, finalScore))
 
         item to min(1.0, max(0.0, finalScore))
     }

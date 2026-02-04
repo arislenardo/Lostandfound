@@ -18,14 +18,14 @@ import com.example.lostandfound.data.AuthManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.model.FoundItem
-import com.example.lostandfound.utils.seedDatabase
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
-    var isSeeding by remember { mutableStateOf(false) }
+
     var showResolvedDialog by remember { mutableStateOf(false) }
     var itemToResolve by remember { mutableStateOf<FoundItem?>(null) }
     val currentUser = auth.currentUser
@@ -33,11 +33,10 @@ fun HomeScreen(navController: NavController) {
     var isAdmin by remember { mutableStateOf(AuthManager.isCurrentUserAdmin()) }
 
 // Re-check automatically when the screen launches to catch any updates
+// Re-check automatically when the screen launches to catch any updates
     LaunchedEffect(Unit) {
-        // Small delay to allow the fetch in MainActivity to complete
-        // (A proper fix involves MutableStateFlow in AuthManager, but this works for Capstone)
-        kotlinx.coroutines.delay(1000)
-        isAdmin = AuthManager.isCurrentUserAdmin()
+        // Fetch fresh status to ensure UI is up to date (no race condition)
+        isAdmin = AuthManager.refreshAdminStatus()
     }
 
     // EXTRACT FIRST NAME
@@ -82,20 +81,7 @@ fun HomeScreen(navController: NavController) {
                 title = { Text("Lost & Found") },
                 actions = {
                     if (isAdmin) {
-                        IconButton(onClick = {
-                            isSeeding = true
-                            seedDatabase { message ->
-                                isSeeding = false
-                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                                navController.navigate("home") { popUpTo("home") { inclusive = true } }
-                            }
-                        }) {
-                            if (isSeeding) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "Reset Data")
-                            }
-                        }
+
                     }
                     TextButton(onClick = {
                         auth.signOut()

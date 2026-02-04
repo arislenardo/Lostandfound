@@ -8,12 +8,23 @@ object AuthManager {
 
     private var adminUids = emptySet<String>()
 
-    suspend fun fetchAdminUids() {
-        try {
+    suspend fun refreshAdminStatus(): Boolean {
+        return try {
             val result = FirebaseFirestore.getInstance().collection("admins").get().await()
             adminUids = result.documents.map { it.id }.toSet()
+            isCurrentUserAdmin()
         } catch (e: Exception) {
-            // Handle error, e.g., log it
+            // Log error
+            false
+        }
+    }
+
+    // Keep for backward compatibility or simple synchronous checks after data is loaded
+    fun fetchAdminUids() {
+        // Fire and forget (legacy, try to avoid using this)
+        val db = FirebaseFirestore.getInstance()
+        db.collection("admins").get().addOnSuccessListener { result ->
+            adminUids = result.documents.map { it.id }.toSet()
         }
     }
 
