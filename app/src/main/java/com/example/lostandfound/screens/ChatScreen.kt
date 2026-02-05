@@ -73,13 +73,22 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(receiverName) },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(receiverName, style = MaterialTheme.typography.titleMedium)
+                        Text("Secure Channel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
     ) { paddingValues ->

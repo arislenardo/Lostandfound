@@ -70,13 +70,22 @@ fun ConversationListScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Messages") },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("MESSAGES", style = MaterialTheme.typography.titleMedium)
+                        Text("Official Communications", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
     ) { paddingValues ->

@@ -18,6 +18,7 @@ import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.LostItem
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,8 +37,7 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
     var editName by remember { mutableStateOf("") }
     var editDescription by remember { mutableStateOf("") }
     var editLocation by remember { mutableStateOf("") }
-    // Note: Category is harder to edit without a dropdown, keeping it simple for now or you can add one.
-
+    
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     // Fetch Item
@@ -122,8 +122,13 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (isEditing) "Edit Item" else "Item Details") },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (isEditing) "EDIT LOST ITEM" else "LOST ITEM DETAILS", style = MaterialTheme.typography.titleMedium)
+                        Text("Ref: #${itemId.take(8)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (isEditing) {
@@ -156,7 +161,11 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                             }
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
     ) { paddingValues ->
@@ -170,53 +179,83 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (isEditing) {
                     // --- EDIT MODE UI ---
-                    OutlinedTextField(
-                        value = editName,
-                        onValueChange = { editName = it },
-                        label = { Text("Item Name") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = editLocation,
-                        onValueChange = { editLocation = it },
-                        label = { Text("Location") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = editDescription,
-                        onValueChange = { editDescription = it },
-                        label = { Text("Description") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
+                    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                label = { Text("Item Name") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = editLocation,
+                                onValueChange = { editLocation = it },
+                                label = { Text("Location") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = editDescription,
+                                onValueChange = { editDescription = it },
+                                label = { Text("Description") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 3
+                            )
+                        }
+                    }
                 } else {
                     // --- VIEW MODE UI ---
                     val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
 
-                    DetailRow("Item Name:", item!!.name)
-                    DetailRow("Description:", item!!.description)
-                    DetailRow("Location Lost:", item!!.location)
-                    // Safe date formatting
-                    val dateString = try { dateFormat.format(item!!.dateLost) } catch(e: Exception) { "Unknown Date" }
-                    DetailRow("Date Lost:", dateString)
-                    DetailRow("Category:", item!!.category)
+                    // General Info Card
+                    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("ITEM REPORT", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            DetailRow("Item Name", item!!.name)
+                            DetailRow("Category", item!!.category)
+                            
+                            val dateString = try { dateFormat.format(item!!.dateLost) } catch(e: Exception) { "Unknown Date" }
+                            DetailRow("Date Lost", dateString)
+                        }
+                    }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    // Location & Description
+                    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("DETAILS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            DetailRow("Location Lost", item!!.location)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Description:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                            Text(item!!.description, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
 
-                    Text("Reporter Information", style = MaterialTheme.typography.titleMedium)
-                    DetailRow("User Email:", item!!.email)
-                    if (isAdmin) {
-                        DetailRow("User ID:", item!!.userId)
+                    // Admin Footer
+                    if (isAdmin || item!!.userId == currentUserId) {
+                        Card(
+                             modifier = Modifier.fillMaxWidth(),
+                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                             Column(modifier = Modifier.padding(16.dp)) {
+                                 Text("INTERNAL RECORD", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                                 Spacer(modifier = Modifier.height(8.dp))
+                                 DetailRow("Reporter Email", item!!.email)
+                                 if(isAdmin) DetailRow("User ID", item!!.userId)
+                             }
+                        }
                     }
                 }
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text("Item not found")
+                Text("Item not found", color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -224,8 +263,8 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
 
 @Composable
 fun DetailRow(label: String, value: String) {
-    Column {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
         Text(text = value, style = MaterialTheme.typography.bodyLarge)
     }
 }

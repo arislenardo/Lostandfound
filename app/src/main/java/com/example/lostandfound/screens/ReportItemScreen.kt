@@ -44,6 +44,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.utils.findLostMatches
+import androidx.compose.material.icons.filled.Add
 import com.example.lostandfound.utils.TFLiteClassifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -96,24 +97,22 @@ fun ReportItemScreen(navController: NavController) {
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
-
-
     // State for Algorithm Matches Dialog
     var showOwnerDialog by remember { mutableStateOf(false) }
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
 
-    // Category Dropdown State (Moved up for scope visibility)
+    // Category Dropdown State
     var expandedCategory by remember { mutableStateOf(false) }
     var isAutoClassified by remember { mutableStateOf(false) }
 
-    val classifier = remember { TFLiteClassifier(context) } // Initialize Classifier
+    val classifier = remember { TFLiteClassifier(context) }
 
+    // --- LAUNCHERS (Keep logic same) ---
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
             capturedImageUri = tempImageUri
-            // Run Classification
             tempImageUri?.let { uri ->
                 try {
                     val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -121,14 +120,14 @@ fun ReportItemScreen(navController: NavController) {
                     } else {
                         @Suppress("DEPRECATION")
                         MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                    }.copy(android.graphics.Bitmap.Config.ARGB_8888, true) // Ensure mutable/correct config
+                    }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
 
                     val results = classifier.classify(bitmap)
                     if (results.isNotEmpty()) {
                         val topResult = results[0]
                         category = classifier.mapLabelToCategory(topResult)
                         isAutoClassified = true
-                        Toast.makeText(context, "Category set to: $topResult", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -137,13 +136,11 @@ fun ReportItemScreen(navController: NavController) {
         }
     }
 
-    // --- GALLERY LAUNCHER ---
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             capturedImageUri = uri
-            // Run Classification
             try {
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
@@ -157,7 +154,7 @@ fun ReportItemScreen(navController: NavController) {
                     val topResult = results[0]
                     category = classifier.mapLabelToCategory(topResult)
                     isAutoClassified = true
-                    Toast.makeText(context, "Category set to: $topResult", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -172,7 +169,7 @@ fun ReportItemScreen(navController: NavController) {
             tempImageUri = createImageUri(context)
             cameraLauncher.launch(tempImageUri)
         } else {
-            Toast.makeText(context, "Camera permission needed to take photos", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Camera permission needed", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -181,7 +178,6 @@ fun ReportItemScreen(navController: NavController) {
     ) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
-            // Permission granted, fetch location
             isFetchingLocation = true
             try {
                 val cancellationTokenSource = CancellationTokenSource()
@@ -194,19 +190,11 @@ fun ReportItemScreen(navController: NavController) {
                             location = "${loc.latitude}, ${loc.longitude}"
                             Toast.makeText(context, "Location fetched!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Could not get location. Try enabling GPS.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Could not get location.", Toast.LENGTH_SHORT).show()
                         }
                     }
-                    .addOnFailureListener {
-                        isFetchingLocation = false
-                        Toast.makeText(context, "Failed to get location", Toast.LENGTH_SHORT).show()
-                    }
-            } catch (e: SecurityException) {
-                isFetchingLocation = false
-                Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(context, "Location permission needed", Toast.LENGTH_SHORT).show()
+                    .addOnFailureListener { isFetchingLocation = false }
+            } catch (e: SecurityException) { isFetchingLocation = false }
         }
     }
 
@@ -228,8 +216,6 @@ fun ReportItemScreen(navController: NavController) {
             status = "Found"
         )
 
-        // Note: Image uploading requires Firebase Storage.
-
         db.collection("found_items")
             .add(newItem)
             .addOnSuccessListener {
@@ -243,7 +229,7 @@ fun ReportItemScreen(navController: NavController) {
             }
     }
 
-    // MATCHES DIALOG (FOR FINDER TO SEE POTENTIAL OWNERS)
+    // --- POPUPS & DIALOGS ---
     if (showOwnerDialog) {
         AlertDialog(
             onDismissRequest = { showOwnerDialog = false },
@@ -259,10 +245,7 @@ fun ReportItemScreen(navController: NavController) {
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(item.name, style = MaterialTheme.typography.titleMedium)
                                         Text(
                                             text = "${(score * 100).toInt()}% Match",
@@ -272,28 +255,12 @@ fun ReportItemScreen(navController: NavController) {
                                     }
                                     Text("Category: ${item.category}", style = MaterialTheme.typography.bodyMedium)
                                     Text(item.description, style = MaterialTheme.typography.bodySmall)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Date Lost: ${item.dateLost}", style = MaterialTheme.typography.labelSmall)
-
                                     Spacer(modifier = Modifier.height(8.dp))
                                     if (item.userId.isNotBlank()) {
                                         Button(onClick = {
-                                            // Navigation to Chat
-                                            // Extract a display name if possible, or use "User"
                                             val displayName = if (item.email.contains("@")) item.email.substringBefore("@") else "User"
                                             navController.navigate("chat/${item.userId}/$displayName")
-                                        }, modifier = Modifier.fillMaxWidth()) {
-                                            Text("Message Owner")
-                                        }
-                                    } else {
-                                        Button(
-                                            onClick = {},
-                                            modifier = Modifier.fillMaxWidth(),
-                                            enabled = false,
-                                            colors = ButtonDefaults.buttonColors(disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant)
-                                        ) {
-                                            Text("No contact info. Please submit report.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
+                                        }, modifier = Modifier.fillMaxWidth()) { Text("Message Owner") }
                                     }
                                 }
                             }
@@ -301,19 +268,8 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    showOwnerDialog = false
-                    saveToFirestore()
-                }) {
-                    Text("Continue to Submit")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showOwnerDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            confirmButton = { TextButton(onClick = { showOwnerDialog = false; saveToFirestore() }) { Text("Continue to Submit") } },
+            dismissButton = { TextButton(onClick = { showOwnerDialog = false }) { Text("Cancel") } }
         )
     }
 
@@ -329,275 +285,228 @@ fun ReportItemScreen(navController: NavController) {
                         dateFound = date
                     }
                     showDatePicker = false
-                }) {
-                    Text("OK")
-                }
+                }) { Text("OK") }
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = datePickerState) }
     }
 
+    // --- MAIN UI ---
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Report Found Item") },
+            CenterAlignedTopAppBar(
+                title = { Text("REPORT FOUND ITEM", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
-    ) { paddingValues ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp)) {
-
-            // Camera Box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (capturedImageUri != null) {
-                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, capturedImageUri!!))
-                    } else {
-                        @Suppress("DEPRECATION")
-                        MediaStore.Images.Media.getBitmap(context.contentResolver, capturedImageUri!!)
-                    }
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Captured Image",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                                if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                                    tempImageUri = createImageUri(context)
-                                    cameraLauncher.launch(tempImageUri)
-                                } else {
-                                    permissionLauncher.launch(Manifest.permission.CAMERA)
-                                }
-                            }
-                        ) {
-                            Text("Retake")
-                        }
-                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Text("Gallery")
-                        }
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Button(onClick = {
-                            val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                            if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                                tempImageUri = createImageUri(context)
-                                cameraLauncher.launch(tempImageUri)
-                            } else {
-                                permissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                        }) {
-                            Text("Take Photo")
-                        }
-                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Text("Gallery")
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text("Item Name") }, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Location Field with GPS Button
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Location") },
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = {
-                    val permissionCheckFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-                    val permissionCheckCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-
-                    if (permissionCheckFine == PackageManager.PERMISSION_GRANTED || permissionCheckCoarse == PackageManager.PERMISSION_GRANTED) {
-                        // Permission granted, fetch location
-                        isFetchingLocation = true
-                        try {
-                            val cancellationTokenSource = CancellationTokenSource()
-                            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.token)
-                                .addOnSuccessListener { loc ->
-                                    isFetchingLocation = false
-                                    if (loc != null) {
-                                        latitude = loc.latitude
-                                        longitude = loc.longitude
-                                        location = "${loc.latitude}, ${loc.longitude}"
-                                        Toast.makeText(context, "Location fetched!", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "Could not get location. Try enabling GPS.", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                                .addOnFailureListener {
-                                    isFetchingLocation = false
-                                    Toast.makeText(context, "Failed to get location", Toast.LENGTH_SHORT).show()
-                                }
-                        } catch (e: SecurityException) {
-                            isFetchingLocation = false
-                            Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                    }
-                }) {
-                    if (isFetchingLocation) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    } else {
-                        Icon(Icons.Default.LocationOn, contentDescription = "Get Location")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Category Dropdown
-            val categories = listOf(
-                "Phone / Tablet", "Keys", "Wallet", "Glasses / Sunglasses", "Headphones / Earbuds", 
-                "Backpacks / Bags", "Umbrellas", "Water Bottles", "Clothing", "Chargers / Cables", 
-                "Watch", "Card", "Laptops / Tablets", "Hats / Beanies", "Books / Notebooks", "Envelope",
-                "Other"
-            )
-
-            ExposedDropdownMenuBox(
-                expanded = expandedCategory,
-                onExpandedChange = { expandedCategory = !expandedCategory },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Category") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = expandedCategory,
-                    onDismissRequest = { expandedCategory = false }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // SECTION 1: PHOTO
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    categories.forEach { selectionOption ->
-                        DropdownMenuItem(
-                            text = { Text(selectionOption) },
-                            onClick = {
-                                category = selectionOption
-                                expandedCategory = false
-                                isAutoClassified = false // User manually changed it
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Item Photo", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clickable { imagePickerLauncher.launch("image/*") },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (capturedImageUri != null) {
+                                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, capturedImageUri!!))
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    MediaStore.Images.Media.getBitmap(context.contentResolver, capturedImageUri!!)
+                                }
+                                Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.secondary)
+                                    Text("Tap to add photo", color = MaterialTheme.colorScheme.secondary)
+                                }
                             }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                        tempImageUri = createImageUri(context)
+                                        cameraLauncher.launch(tempImageUri)
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Camera") }
+                            OutlinedButton(
+                                onClick = { imagePickerLauncher.launch("image/*") },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Gallery") }
+                        }
+                    }
+                }
+            }
+
+            // SECTION 2: DETAILS
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Item Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text("What is it?") }, modifier = Modifier.fillMaxWidth())
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Category
+                        val categories = listOf("Phone / Tablet", "Keys", "Wallet", "Glasses", "Headphones", "Bag", "Clothing", "Laptop", "Other")
+                        ExposedDropdownMenuBox(
+                            expanded = expandedCategory,
+                            onExpandedChange = { expandedCategory = !expandedCategory }
+                        ) {
+                            OutlinedTextField(
+                                value = category,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Category") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
+                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedCategory,
+                                onDismissRequest = { expandedCategory = false }
+                            ) {
+                                categories.forEach { opt ->
+                                    DropdownMenuItem(text = { Text(opt) }, onClick = { category = opt; expandedCategory = false; isAutoClassified = false })
+                                }
+                            }
+                        }
+                        if (isAutoClassified) {
+                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top=4.dp))
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = dateFoundText,
+                            onValueChange = {},
+                            label = { Text("Date Found") },
+                            modifier = Modifier.fillMaxWidth(),
+                            readOnly = true,
+                            trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.DateRange, null) } }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("Description (Color, Brand, etc.)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3
                         )
                     }
                 }
             }
-            if (isAutoClassified) {
-                Text(
-                    text = "✨ Automatically categorized by AI",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Date Picker Field
-            OutlinedTextField(
-                value = dateFoundText,
-                onValueChange = {},
-                label = { Text("Date Found") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = true,
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+            // SECTION 3: LOCATION
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Location", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = location,
+                                onValueChange = { location = it },
+                                label = { Text("Where was it found?") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                                    isFetchingLocation = true
+                                    fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
+                                        .addOnSuccessListener { loc ->
+                                            isFetchingLocation = false
+                                            if (loc != null) {
+                                                latitude = loc.latitude
+                                                longitude = loc.longitude
+                                                location = "${loc.latitude}, ${loc.longitude}"
+                                            }
+                                        }
+                                } else {
+                                    locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                                }
+                            }) {
+                                if (isFetchingLocation) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Icon(Icons.Default.LocationOn, null)
+                            }
+                        }
                     }
                 }
-            )
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (isSubmitting || isCheckingMatches) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            // SUBMIT BUTTON
+            item {
+                if (isSubmitting || isCheckingMatches) {
                     CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(if(isCheckingMatches) "Checking against lost items..." else "Submitting...")
-                }
-            } else {
-                Button(
-                    onClick = {
-                        if (itemName.isBlank() || location.isBlank()) {
-                            Toast.makeText(context, "Please fill in required fields", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        coroutineScope.launch {
-                            isCheckingMatches = true
-                            // 1. Check against Lost Items
-                            db.collection("lost_items").get()
-                                .addOnSuccessListener { result ->
-                                    coroutineScope.launch {
+                    Text(if (isCheckingMatches) "Checking for owners..." else "Submitting...")
+                } else {
+                    Button(
+                        onClick = {
+                            if (itemName.isBlank() || location.isBlank()) {
+                                Toast.makeText(context, "Please fill required fields", Toast.LENGTH_SHORT).show()
+                            } else {
+                                coroutineScope.launch {
+                                    isCheckingMatches = true
+                                    db.collection("lost_items").get().addOnSuccessListener { result ->
                                         val allLostItems = result.toObjects(LostItem::class.java)
-
-                                        // 2. Run Algorithm (Reverse check)
-                                        val matches = withContext(Dispatchers.Default) {
-                                            findLostMatches(itemName, description, allLostItems)
+                                        coroutineScope.launch {
+                                            val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, allLostItems) }
+                                            isCheckingMatches = false
+                                            if (matches.isNotEmpty()) {
+                                                potentialOwners = matches
+                                                showOwnerDialog = true
+                                            } else {
+                                                saveToFirestore()
+                                            }
                                         }
-
+                                    }.addOnFailureListener {
                                         isCheckingMatches = false
-
-                                        if (matches.isNotEmpty()) {
-                                            // 3a. Show Matches
-                                            potentialOwners = matches
-                                            showOwnerDialog = true
-                                        } else {
-                                            // 3b. No Matches -> Save directly
-                                            saveToFirestore()
-                                        }
+                                        saveToFirestore()
                                     }
                                 }
-                                .addOnFailureListener {
-                                    isCheckingMatches = false
-                                    saveToFirestore()
-                                }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Submit Report")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text("SUBMIT REPORT", style = MaterialTheme.typography.titleMedium)
+                    }
                 }
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }

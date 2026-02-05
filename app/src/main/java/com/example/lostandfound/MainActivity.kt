@@ -15,12 +15,33 @@ import com.google.firebase.auth.FirebaseAuth
 import com.example.lostandfound.screens.*
 import com.example.lostandfound.data.AuthManager
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.example.lostandfound.ui.theme.ThemeConfig
+import com.example.lostandfound.ui.theme.LocalThemeConfig
+import com.example.lostandfound.ui.theme.LostandfoundTheme
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                LostAndFoundApp()
+            var isDark by remember { mutableStateOf(false) } // Default to Light for now
+            // Dynamic color removed as per request
+
+            val themeConfig = remember(isDark) {
+                ThemeConfig(
+                    isDark = isDark,
+                    toggleDark = { isDark = !isDark }
+                )
+            }
+
+            CompositionLocalProvider(LocalThemeConfig provides themeConfig) {
+                LostandfoundTheme(darkTheme = isDark) {
+                    LostAndFoundApp()
+                }
             }
         }
     }
@@ -76,6 +97,9 @@ fun LostAndFoundApp() {
             val userId = backStackEntry.arguments?.getString("userId") ?: ""
             val userName = backStackEntry.arguments?.getString("userName") ?: "User"
             ChatScreen(navController = navController, receiverId = userId, receiverName = userName)
+        }
+        composable("admin_claims") {
+            AdminClaimsScreen(navController = navController)
         }
     }
 }

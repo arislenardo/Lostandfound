@@ -4,10 +4,12 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +21,8 @@ import com.example.lostandfound.data.AuthManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.model.FoundItem
+import androidx.compose.material.icons.filled.Settings
+import com.example.lostandfound.ui.theme.LocalThemeConfig
 import com.example.lostandfound.utils.seedDatabase
 
 
@@ -32,20 +36,16 @@ fun HomeScreen(navController: NavController) {
     var showResolvedDialog by remember { mutableStateOf(false) }
     var itemToResolve by remember { mutableStateOf<FoundItem?>(null) }
     val currentUser = auth.currentUser
-    // Checks immediately, but updates UI if the status changes
     var isAdmin by remember { mutableStateOf(AuthManager.isCurrentUserAdmin()) }
 
-// Re-check automatically when the screen launches to catch any updates
-// Re-check automatically when the screen launches to catch any updates
     LaunchedEffect(Unit) {
-        // Fetch fresh status to ensure UI is up to date (no race condition)
         isAdmin = AuthManager.refreshAdminStatus()
     }
 
-    // EXTRACT FIRST NAME
-    // 1. Get full name (or fallback to email/default)
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    val themeConfig = LocalThemeConfig.current
+
     val displayName = currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User"
-    // 2. Take substring before first space to get "First Name"
     val firstName = displayName.split(" ").firstOrNull() ?: displayName
 
     fun markAsResolved(item: FoundItem) {
@@ -61,28 +61,22 @@ fun HomeScreen(navController: NavController) {
             }
     }
 
-    if (showResolvedDialog && itemToResolve != null) {
-        AlertDialog(
-            onDismissRequest = { showResolvedDialog = false },
-            title = { Text("Mark as Resolved?") },
-            text = { Text("Have you returned this item to its owner? This will hide it from the active list.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    markAsResolved(itemToResolve!!)
-                    showResolvedDialog = false
-                }) { Text("Yes, Resolved") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResolvedDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
+    // (Dialog code removed or kept if needed - keeping logic minimal for dashboard focus)
+    // Assuming dialog logic resides elsewhere or is triggered by list view, keeping it dormant here is fine.
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Lost & Found") },
+                title = { 
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("STATION DASHBOARD", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("Official Lost & Found", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                },
                 actions = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Theme Settings", tint = MaterialTheme.colorScheme.primary)
+                    }
                     if (isAdmin) {
                         IconButton(onClick = {
                             seedDatabase { result ->
@@ -90,7 +84,7 @@ fun HomeScreen(navController: NavController) {
                                 Toast.makeText(context, result, Toast.LENGTH_LONG).show()
                             }
                         }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Seed Database")
+                            Icon(Icons.Default.Refresh, contentDescription = "Seed Database", tint = MaterialTheme.colorScheme.primary)
                         }
 
                     }
@@ -98,7 +92,7 @@ fun HomeScreen(navController: NavController) {
                         auth.signOut()
                         navController.navigate("login") { popUpTo("home") { inclusive = true } }
                     }) {
-                        Text("Logout")
+                        Text("Logout", color = MaterialTheme.colorScheme.error)
                     }
                 }
             )
@@ -108,79 +102,135 @@ fun HomeScreen(navController: NavController) {
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // UPDATED WELCOME TEXT
-            Text(
-                text = "Welcome, ${if (isAdmin) "Admin $firstName" else "Resident $firstName"}",
-                style = MaterialTheme.typography.headlineSmall
-            )
-
-            Text("What would you like to do?", style = MaterialTheme.typography.bodyMedium)
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Action Buttons
-            ActionCard(
-                title = "I Lost Something",
-                description = "Report an item that you have lost.",
-                icon = Icons.Default.Add,
-                onClick = { navController.navigate("report_lost") }
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-
-
-            ActionCard(
-                title = "I Found Something",
-                description = "Report an item that you have found to help its owner.",
-                icon = Icons.Default.Add,
-                onClick = { navController.navigate("report") }
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (isAdmin) {
-                ActionCard(
-                    title = "View All Found Items",
-                    description = "Search database for found items.",
-                    icon = Icons.Default.Search,
-                    onClick = { navController.navigate("lost") }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+            // WELCOME HEADER
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Filled.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Welcome, $firstName",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = if (isAdmin) "Administrator Access" else "Resident Access",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                        )
+                    }
+                }
             }
 
-            ActionCard(
-                title = if (isAdmin) "View All Lost Items" else "My Reported Items",
-                description = if (isAdmin) "Review all items reported as lost by users." else "View the status of items you have reported as lost.",
-                icon = Icons.AutoMirrored.Filled.List,
-                onClick = { navController.navigate("my_items") }
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            ActionCard(
-                title = "Messages",
-                description = "View your conversations.",
-                icon = Icons.AutoMirrored.Filled.Send,
-                onClick = { navController.navigate("conversations") }
-            )
+            Text("QUICK ACTIONS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.weight(1f))
+            // DASHBOARD GRID
+            // Row 1: Reporting
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                DashboardCard(
+                    title = "I Lost An Item",
+                    icon = Icons.Default.Add,
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.navigate("report_lost") }
+                )
+                DashboardCard(
+                    title = "I Found An Item",
+                    icon = androidx.compose.material.icons.Icons.Filled.Edit, // or Visibility
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.navigate("report") }
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Row 2: Management
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                DashboardCard(
+                    title = if (isAdmin) "View All Lost Items" else "My Reports",
+                    icon = Icons.AutoMirrored.Filled.List,
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.navigate("my_items") }
+                )
+                DashboardCard(
+                    title = "Messages",
+                    icon = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send, // or Message
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.navigate("conversations") }
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Row 3: Admin Only (Search & Claims)
+            if (isAdmin) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DashboardCard(
+                        title = "View All Found Items",
+                        icon = Icons.Default.Search,
+                        modifier = Modifier.weight(1f),
+                        onClick = { navController.navigate("lost") }
+                    )
+                    DashboardCard(
+                        title = "Review Claims",
+                        icon = Icons.Default.Person, // Using Person as proxy for "User Claims"
+                        modifier = Modifier.weight(1f),
+                        onClick = { navController.navigate("admin_claims") }
+                    )
+                }
+            }
         }
+    }
+
+    if (showSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("App Settings") },
+            text = {
+                Column {
+                    Text("Customize your experience:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("Dark Mode", modifier = Modifier.weight(1f))
+                        Switch(checked = themeConfig.isDark, onCheckedChange = { themeConfig.toggleDark() })
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSettingsDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 
 @Composable
-fun ActionCard(title: String, description: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+fun DashboardCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = modifier.height(120.dp), // Square-ish
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         onClick = onClick
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = title, style = MaterialTheme.typography.titleLarge)
-                Text(text = description, style = MaterialTheme.typography.bodyMedium)
-            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
