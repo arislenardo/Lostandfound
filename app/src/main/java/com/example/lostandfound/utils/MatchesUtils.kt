@@ -7,8 +7,6 @@ import kotlin.math.*
 fun findPotentialMatches(
     targetName: String,
     targetDesc: String,
-    targetLat: Double?,
-    targetLon: Double?,
     itemsInDb: List<FoundItem>
 ): List<Pair<FoundItem, Double>> {
 
@@ -40,8 +38,6 @@ fun findPotentialMatches(
 fun findLostMatches(
     targetName: String,
     targetDesc: String,
-    targetLat: Double?,
-    targetLon: Double?,
     itemsInDb: List<LostItem> // This version takes LostItems
 ): List<Pair<LostItem, Double>> {
     if (targetName.isBlank()) return emptyList()
@@ -56,7 +52,7 @@ fun findLostMatches(
 
         item to min(1.0, max(0.0, finalScore))
 
-        item to min(1.0, max(0.0, finalScore))
+
     }
         .filter { it.second > 0.65 }
         .sortedByDescending { it.second }

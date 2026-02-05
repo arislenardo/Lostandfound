@@ -54,5 +54,19 @@ fun LostAndFoundApp() {
                 ItemDetailScreen(navController = navController, itemId = itemId)
             }
         }
+        composable("conversations") {
+            ConversationListScreen(navController = navController)
+        }
+        composable(
+            route = "chat/{userId}/{userName}",
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType },
+                navArgument("userName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId") ?: ""
+            val userName = backStackEntry.arguments?.getString("userName") ?: "User"
+            ChatScreen(navController = navController, receiverId = userId, receiverName = userName)
+        }
     }
 }

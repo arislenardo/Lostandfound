@@ -58,7 +58,7 @@ fun LostItemsScreen(navController: NavController) {
         } else {
             // Re-use algorithm for local search display as well, cast double to nullable
             // Passing null, null for lat/lon since this is a keyword search
-            findPotentialMatches(searchQuery, "", null, null, foundItems).map { it.first to it.second }
+            findPotentialMatches(searchQuery, "", foundItems).map { it.first to it.second }
         }
 
         if (filteredItems.isEmpty()) {
@@ -112,7 +112,11 @@ fun LostItemsScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Button(onClick = { navController.popBackStack() }, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = {
+            if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                navController.popBackStack()
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
             Text("Back to Home")
         }
     }

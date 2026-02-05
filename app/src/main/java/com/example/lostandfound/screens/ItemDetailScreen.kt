@@ -126,7 +126,11 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                 title = { Text(if (isEditing) "Edit Item" else "Item Details") },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (isEditing) isEditing = false else navController.popBackStack()
+                        if (isEditing) {
+                            isEditing = false
+                        } else if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
                     }) {
                         Icon(
                             if (isEditing) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,

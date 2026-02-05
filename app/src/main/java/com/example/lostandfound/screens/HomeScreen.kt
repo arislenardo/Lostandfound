@@ -120,11 +120,22 @@ fun HomeScreen(navController: NavController) {
             // Action Buttons
             ActionCard(
                 title = "I Lost Something",
-                description = "Search for items that have been found by others.",
-                icon = Icons.Default.Search,
-                onClick = { navController.navigate("lost") }
+                description = "Report an item that you have lost.",
+                icon = Icons.Default.Add,
+                onClick = { navController.navigate("report_lost") }
             )
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (isAdmin) {
+                ActionCard(
+                    title = "Search Found Items",
+                    description = "Search database for found items.",
+                    icon = Icons.Default.Search,
+                    onClick = { navController.navigate("lost") }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             ActionCard(
                 title = "I Found Something",
                 description = "Report an item that you have found to help its owner.",
@@ -137,6 +148,14 @@ fun HomeScreen(navController: NavController) {
                 description = if (isAdmin) "Review all items reported as lost by users." else "View the status of items you have reported as lost.",
                 icon = Icons.AutoMirrored.Filled.List,
                 onClick = { navController.navigate("my_items") }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            ActionCard(
+                title = "Messages",
+                description = "View your conversations.",
+                icon = Icons.Default.Email,
+                onClick = { navController.navigate("conversations") }
             )
 
             Spacer(modifier = Modifier.weight(1f))

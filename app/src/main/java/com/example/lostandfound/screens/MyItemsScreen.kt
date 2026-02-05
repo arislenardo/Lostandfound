@@ -53,7 +53,11 @@ fun MyItemsScreen(navController: NavController) {
             TopAppBar(
                 title = { Text(if (isAdmin) "All Reported Lost Items" else "My Reported Items") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }

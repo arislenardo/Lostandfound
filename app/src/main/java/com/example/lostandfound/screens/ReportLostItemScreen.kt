@@ -94,10 +94,32 @@ fun ReportLostItemScreen(navController: NavController) {
     var showMatchesDialog by remember { mutableStateOf(false) }
     var potentialMatches by remember { mutableStateOf<List<Pair<FoundItem, Double>>>(emptyList()) }
 
+    val classifier = remember { com.example.lostandfound.utils.TFLiteClassifier(context) }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedImageUri = uri
+        // Run Classification
+        uri?.let {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+
+                val results = classifier.classify(bitmap)
+                if (results.isNotEmpty()) {
+                    val topResult = results[0]
+                    category = classifier.mapLabelToCategory(topResult)
+                    Toast.makeText(context, "Classified as: $topResult -> $category", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -195,13 +217,11 @@ fun ReportLostItemScreen(navController: NavController) {
                     scope.launch {
                         // FIX: This calls the specific function in MatchUtils
                         val matches = withContext(Dispatchers.Default) {
-                            findPotentialMatches(
-                                targetName = itemName,
-                                targetDesc = description,
-                                targetLat = latitude,
-                                targetLon = longitude,
-                                itemsInDb = allFoundItems
-                            )
+                                findPotentialMatches(
+                                    targetName = itemName,
+                                    targetDesc = description,
+                                    itemsInDb = allFoundItems
+                                )
                         }
 
                         isCheckingMatches = false
@@ -251,20 +271,11 @@ fun ReportLostItemScreen(navController: NavController) {
                                     Text(item.description, style = MaterialTheme.typography.bodySmall)
 
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    if (item.email.isNotBlank()) {
-                                        val emailSubject = stringResource(R.string.email_subject_inquiry, item.name)
-                                        val emailBody = stringResource(R.string.email_body_inquiry, item.name)
+                                    if (item.userId.isNotBlank()) {
                                         Button(onClick = {
-                                            val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                                data = Uri.parse("mailto:${item.email}")
-                                                putExtra(Intent.EXTRA_SUBJECT, emailSubject)
-                                                putExtra(Intent.EXTRA_TEXT, emailBody)
-                                            }
-                                            try {
-                                                context.startActivity(intent)
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, context.getString(R.string.no_email_app_error), Toast.LENGTH_SHORT).show()
-                                            }
+                                            // Navigation to Chat
+                                            val displayName = if (item.email.contains("@")) item.email.substringBefore("@") else "User"
+                                            navController.navigate("chat/${item.userId}/$displayName")
                                         }, modifier = Modifier.fillMaxWidth()) {
                                             Text(stringResource(R.string.message_finder_button))
                                         }
@@ -348,7 +359,11 @@ fun ReportLostItemScreen(navController: NavController) {
             TopAppBar(
                 title = { Text(stringResource(R.string.report_lost_item_title)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back_content_description)

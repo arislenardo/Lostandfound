@@ -1,0 +1,16 @@
+0 Phone_Tablet
+1 Keys
+2 Wallet
+3 Glasses / Sunglasses
+4 Headphones / Earbuds
+5 Backpacks / Bags
+6 Umbrellas
+7 Water Bottles
+8 Clothing
+9 Chargers / Cables
+10 Watch
+11 Card
+12 Laptops / Tablets
+13 Hats / Beanies
+14 Books / Notebooks
+15 Envelope

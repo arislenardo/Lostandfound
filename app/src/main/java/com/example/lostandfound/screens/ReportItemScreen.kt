@@ -105,11 +105,34 @@ fun ReportItemScreen(navController: NavController) {
     var showOwnerDialog by remember { mutableStateOf(false) }
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
 
+    val context = LocalContext.current
+    val classifier = remember { TFLiteClassifier(context) } // Initialize Classifier
+
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
             capturedImageUri = tempImageUri
+            // Run Classification
+            tempImageUri?.let { uri ->
+                try {
+                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    }.copy(android.graphics.Bitmap.Config.ARGB_8888, true) // Ensure mutable/correct config
+
+                    val results = classifier.classify(bitmap)
+                    if (results.isNotEmpty()) {
+                        val topResult = results[0]
+                        category = classifier.mapLabelToCategory(topResult)
+                        Toast.makeText(context, "Classified as: $topResult -> $category", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -224,18 +247,12 @@ fun ReportItemScreen(navController: NavController) {
                                     Text("Date Lost: ${item.dateLost}", style = MaterialTheme.typography.labelSmall)
 
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    if (item.email.isNotBlank()) {
+                                    if (item.userId.isNotBlank()) {
                                         Button(onClick = {
-                                            val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                                data = Uri.parse("mailto:${item.email}")
-                                                putExtra(Intent.EXTRA_SUBJECT, "Found Item: ${item.name}")
-                                                putExtra(Intent.EXTRA_TEXT, "Hello, I think I found your ${item.name}. Please contact me.")
-                                            }
-                                            try {
-                                                context.startActivity(intent)
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
-                                            }
+                                            // Navigation to Chat
+                                            // Extract a display name if possible, or use "User"
+                                            val displayName = if (item.email.contains("@")) item.email.substringBefore("@") else "User"
+                                            navController.navigate("chat/${item.userId}/$displayName")
                                         }, modifier = Modifier.fillMaxWidth()) {
                                             Text("Message Owner")
                                         }
@@ -302,7 +319,11 @@ fun ReportItemScreen(navController: NavController) {
             TopAppBar(
                 title = { Text("Report Found Item") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
@@ -508,7 +529,7 @@ fun ReportItemScreen(navController: NavController) {
 
                                         // 2. Run Algorithm (Reverse check)
                                         val matches = withContext(Dispatchers.Default) {
-                                            findLostMatches(itemName, description, latitude, longitude, allLostItems)
+                                            findLostMatches(itemName, description, allLostItems)
                                         }
 
                                         isCheckingMatches = false
