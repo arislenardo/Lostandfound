@@ -128,13 +128,10 @@ fun ReportItemScreen(navController: NavController) {
                         val topResult = results[0]
                         category = classifier.mapLabelToCategory(topResult)
                         isAutoClassified = true
-                        Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "No classification results found", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Category set to: $topResult", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(context, "Classification error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -160,13 +157,10 @@ fun ReportItemScreen(navController: NavController) {
                     val topResult = results[0]
                     category = classifier.mapLabelToCategory(topResult)
                     isAutoClassified = true
-                    Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "No classification results found", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Category set to: $topResult", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                Toast.makeText(context, "Classification error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }

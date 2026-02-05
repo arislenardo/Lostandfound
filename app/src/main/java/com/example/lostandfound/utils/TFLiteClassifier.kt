@@ -2,62 +2,95 @@ package com.example.lostandfound.utils
 
 import android.content.Context
 import android.graphics.Bitmap
-import org.tensorflow.lite.task.vision.detector.ObjectDetector
-import org.tensorflow.lite.task.vision.classifier.ImageClassifier
-import org.tensorflow.lite.task.vision.classifier.Classifications
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.common.ops.NormalizeOp
+import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
-import org.tensorflow.lite.task.core.BaseOptions
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import org.tensorflow.lite.support.label.TensorLabel
+import java.nio.MappedByteBuffer
 
 class TFLiteClassifier(val context: Context) {
 
-    private var imageClassifier: ImageClassifier? = null
+    private var interpreter: Interpreter? = null
+    private var labels: List<String> = emptyList()
 
     init {
         setupClassifier()
     }
 
     private fun setupClassifier() {
-        val optionsBuilder = ValidatedImageClassifierOptions.builder()
-            .setScoreThreshold(0.5f)
-            .setMaxResults(3)
-
-        val baseOptionsBuilder = BaseOptions.builder()
-        // baseOptionsBuilder.useGpu() // Uncomment if using GPU
-
-        optionsBuilder.setBaseOptions(baseOptionsBuilder.build())
-
         try {
-            // Using the model name provided by the user
-            imageClassifier = ImageClassifier.createFromFileAndOptions(
-                context,
-                "model_unquant.tflite",
-                optionsBuilder.build()
-            )
-        } catch (e: IllegalStateException) {
+            // Load the model
+            val model: MappedByteBuffer = FileUtil.loadMappedFile(context, "model_unquant.tflite")
+            val options = Interpreter.Options()
+            interpreter = Interpreter(model, options)
+
+            // Load labels
+            labels = FileUtil.loadLabels(context, "labels.txt")
+            
+            android.util.Log.d("TFLiteClassifier", "Model loaded. Labels size: ${labels.size}")
+
+        } catch (e: Exception) {
             e.printStackTrace()
+            android.util.Log.e("TFLiteClassifier", "Error initializing classifier", e)
+            // Toast removed here to avoid context leaks or background thread issues, 
+            // relying on classify logging
         }
     }
 
     fun classify(bitmap: Bitmap): List<String> {
-        if (imageClassifier == null) {
+        if (interpreter == null) {
             setupClassifier()
+            if (interpreter == null) {
+                return emptyList()
+            }
         }
 
-        val image = TensorImage.fromBitmap(bitmap)
-        val results: List<Classifications> = imageClassifier?.classify(image) ?: emptyList()
-        
-        return results.flatMap { it.categories }
-            .map { it.label }
+        try {
+            // 1. Preprocess the image
+            // Teachable Machine standard: 224x224, float32, normalized [0,1]
+            val imageProcessor = ImageProcessor.Builder()
+                .add(ResizeOp(224, 224, ResizeOp.ResizeMethod.BILINEAR))
+                .add(NormalizeOp(0f, 255f)) // Normalize 0-255 to 0-1
+                .build()
+
+            var tensorImage = TensorImage(org.tensorflow.lite.DataType.FLOAT32)
+            tensorImage.load(bitmap)
+            tensorImage = imageProcessor.process(tensorImage)
+
+            // 2. Output buffer
+            // Shape: [1, num_classes]
+            val outputBuffer = org.tensorflow.lite.support.tensorbuffer.TensorBuffer.createFixedSize(
+                intArrayOf(1, labels.size),
+                org.tensorflow.lite.DataType.FLOAT32
+            )
+
+            // 3. Run inference
+            interpreter?.run(tensorImage.buffer, outputBuffer.buffer.rewind())
+
+            // 4. Map output to labels
+            val labeledProbability = TensorLabel(labels, outputBuffer).mapWithFloatValue
+            
+            // 5. Filter and sort (Threshold 0.15)
+            return labeledProbability.filter { it.value > 0.15f }
+                .entries
+                .sortedByDescending { it.value }
+                .take(3)
+                .map { it.key }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            android.util.Log.e("TFLiteClassifier", "Classification error", e)
+            return emptyList()
+        }
     }
-    
-    // Helper to map standardized model labels to our app categories
+
     fun mapLabelToCategory(label: String): String {
-        // The model returns labels like "0 Phone_Tablet" or just "Phone_Tablet" depending on metadata.
-        // We will strip the leading number if present and replace underscores with spaces for better UI.
+        // Strip leading numbers (e.g. "0 Phone" -> "Phone")
+        // Replace underscores with " / "
         val cleaned = label.replaceFirst(Regex("^\\d+\\s+"), "").replace("_", " / ")
         return cleaned
     }
 }
-
-// Wrapper to avoid import issues if different versions
-typealias ValidatedImageClassifierOptions = org.tensorflow.lite.task.vision.classifier.ImageClassifier.ImageClassifierOptions
