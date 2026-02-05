@@ -54,6 +54,15 @@ fun LostAndFoundApp() {
                 ItemDetailScreen(navController = navController, itemId = itemId)
             }
         }
+        composable(
+            route = "found_item_detail/{itemId}",
+            arguments = listOf(navArgument("itemId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getString("itemId")
+            if (itemId != null) {
+                FoundItemDetailScreen(navController = navController, itemId = itemId)
+            }
+        }
         composable("conversations") {
             ConversationListScreen(navController = navController)
         }
