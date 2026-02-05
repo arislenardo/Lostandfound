@@ -56,7 +56,19 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-// --- SCREEN 5: REPORT LOST ITEM FORM (With Auto-Match Algorithm) ---
+// Function to create a temporary image file uri
+private fun createImageUri(context: Context): Uri {
+    val imageFile = java.io.File.createTempFile(
+        "JPEG_${System.currentTimeMillis()}_",
+        ".jpg",
+        context.cacheDir
+    )
+    return androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.provider", // authority
+        imageFile
+    )
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportLostItemScreen(navController: NavController) {
@@ -84,15 +96,15 @@ fun ReportLostItemScreen(navController: NavController) {
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
-    // Category Dropdown State
-    var expandedCategory by remember { mutableStateOf(false) }
-    val categories = listOf("Electronics", "Clothing", "Accessories", "Documents", "Keys", "Others")
-    var textFieldSize by remember { mutableStateOf(Size.Zero) }
-    val iconCategory = if (expandedCategory) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown
+
 
     // State for Algorithm Matches Dialog
     var showMatchesDialog by remember { mutableStateOf(false) }
     var potentialMatches by remember { mutableStateOf<List<Pair<FoundItem, Double>>>(emptyList()) }
+
+    // Category Dropdown State (Moved up for scope visibility)
+    var expandedCategory by remember { mutableStateOf(false) }
+    var isAutoClassified by remember { mutableStateOf(false) }
 
     val classifier = remember { com.example.lostandfound.utils.TFLiteClassifier(context) }
 
@@ -114,11 +126,61 @@ fun ReportLostItemScreen(navController: NavController) {
                 if (results.isNotEmpty()) {
                     val topResult = results[0]
                     category = classifier.mapLabelToCategory(topResult)
-                    Toast.makeText(context, "Classified as: $topResult -> $category", Toast.LENGTH_SHORT).show()
+                    isAutoClassified = true
+                    Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "No classification results found", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                Toast.makeText(context, "Classification error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    // --- CAMERA LAUNCHER & PERMISSIONS ---
+    var tempImageUri by remember { mutableStateOf<Uri?>(null) }
+    
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            selectedImageUri = tempImageUri
+            // Run Classification
+            tempImageUri?.let { uri ->
+                try {
+                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+
+                    val results = classifier.classify(bitmap)
+                    if (results.isNotEmpty()) {
+                        val topResult = results[0]
+                        category = classifier.mapLabelToCategory(topResult)
+                        isAutoClassified = true
+                        Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "No classification results found", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(context, "Classification error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            tempImageUri = createImageUri(context)
+            cameraLauncher.launch(tempImageUri)
+        } else {
+            Toast.makeText(context, "Camera permission needed", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -397,15 +459,45 @@ fun ReportLostItemScreen(navController: NavController) {
                         contentDescription = "Selected Image",
                         modifier = Modifier.fillMaxSize()
                     )
-                    Button(
-                        onClick = { imagePickerLauncher.launch("image/*") },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                    Row(
+                         modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Change Photo")
+                        Button(
+                            onClick = {
+                                val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                                if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                                    tempImageUri = createImageUri(context)
+                                    cameraLauncher.launch(tempImageUri)
+                                } else {
+                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                }
+                            }
+                        ) {
+                            Text("Retake")
+                        }
+                        Button(
+                            onClick = { imagePickerLauncher.launch("image/*") }
+                        ) {
+                            Text("Gallery")
+                        }
                     }
                 } else {
-                    Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                        Text("Select Photo")
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Button(onClick = {
+                            val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                            if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                                tempImageUri = createImageUri(context)
+                                cameraLauncher.launch(tempImageUri)
+                            } else {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        }) {
+                            Text("Take Photo")
+                        }
+                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+                            Text("Gallery")
+                        }
                     }
                 }
             }
@@ -467,46 +559,49 @@ fun ReportLostItemScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Category Dropdown
-            Box(modifier = Modifier.fillMaxWidth()) {
+            val categories = listOf(
+                "Phone / Tablet", "Keys", "Wallet", "Glasses / Sunglasses", "Headphones / Earbuds", 
+                "Backpacks / Bags", "Umbrellas", "Water Bottles", "Clothing", "Chargers / Cables", 
+                "Watch", "Card", "Laptops / Tablets", "Hats / Beanies", "Books / Notebooks", "Envelope",
+                "Other"
+            )
+
+            ExposedDropdownMenuBox(
+                expanded = expandedCategory,
+                onExpandedChange = { expandedCategory = !expandedCategory },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 OutlinedTextField(
                     value = category,
-                    onValueChange = { category = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coordinates ->
-                            textFieldSize = coordinates.size.toSize()
-                        },
+                    onValueChange = {},
+                    readOnly = true,
                     label = { Text(stringResource(R.string.category_label)) },
-                    trailingIcon = {
-                        Icon(iconCategory, "contentDescription",
-                            Modifier.clickable { expandedCategory = !expandedCategory })
-                    },
-                    readOnly = true // Make it read-only so keyboard doesn't pop up
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                 )
-
-                // Transparent clickable surface to cover the text field for dropdown trigger
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clickable { expandedCategory = !expandedCategory }
-                )
-
-                DropdownMenu(
+                ExposedDropdownMenu(
                     expanded = expandedCategory,
-                    onDismissRequest = { expandedCategory = false },
-                    modifier = Modifier
-                        .width(with(LocalDensity.current) { textFieldSize.width.toDp() })
+                    onDismissRequest = { expandedCategory = false }
                 ) {
-                    categories.forEach { label ->
+                    categories.forEach { selectionOption ->
                         DropdownMenuItem(
-                            text = { Text(text = label) },
+                            text = { Text(selectionOption) },
                             onClick = {
-                                category = label
+                                category = selectionOption
                                 expandedCategory = false
+                                isAutoClassified = false // User manually changed it
                             }
                         )
                     }
                 }
+            }
+            if (isAutoClassified) {
+                Text(
+                    text = "✨ Automatically categorized by AI",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

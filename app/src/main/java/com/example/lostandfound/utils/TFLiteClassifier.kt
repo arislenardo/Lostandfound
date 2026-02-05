@@ -52,14 +52,10 @@ class TFLiteClassifier(val context: Context) {
     
     // Helper to map standardized model labels to our app categories
     fun mapLabelToCategory(label: String): String {
-        return when (label.lowercase()) {
-            "laptop", "phone_tablet", "headphones_earbuds", "charger_cable" -> "Electronics"
-            "clothing", "hat" -> "Clothing"
-            "watch", "glasses_sunglasses", "backpack_bag", "wallet", "umbrella", "water bottle" -> "Accessories"
-            "folder_envelope", "book_notebook" -> "Documents"
-            "key" -> "Keys"
-            else -> "Others"
-        }
+        // The model returns labels like "0 Phone_Tablet" or just "Phone_Tablet" depending on metadata.
+        // We will strip the leading number if present and replace underscores with spaces for better UI.
+        val cleaned = label.replaceFirst(Regex("^\\d+\\s+"), "").replace("_", " / ")
+        return cleaned
     }
 }
 

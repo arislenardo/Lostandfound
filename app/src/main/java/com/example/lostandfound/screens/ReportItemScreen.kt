@@ -96,15 +96,15 @@ fun ReportItemScreen(navController: NavController) {
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
-    // Category Dropdown State
-    var expandedCategory by remember { mutableStateOf(false) }
-    val categories = listOf("Electronics", "Clothing", "Accessories", "Documents", "Keys", "Others")
-    var textFieldSize by remember { mutableStateOf(Size.Zero) }
-    val iconCategory = if (expandedCategory) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown
+
 
     // State for Algorithm Matches Dialog
     var showOwnerDialog by remember { mutableStateOf(false) }
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
+
+    // Category Dropdown State (Moved up for scope visibility)
+    var expandedCategory by remember { mutableStateOf(false) }
+    var isAutoClassified by remember { mutableStateOf(false) }
 
     val classifier = remember { TFLiteClassifier(context) } // Initialize Classifier
 
@@ -127,11 +127,46 @@ fun ReportItemScreen(navController: NavController) {
                     if (results.isNotEmpty()) {
                         val topResult = results[0]
                         category = classifier.mapLabelToCategory(topResult)
-                        Toast.makeText(context, "Classified as: $topResult -> $category", Toast.LENGTH_SHORT).show()
+                        isAutoClassified = true
+                        Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "No classification results found", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    Toast.makeText(context, "Classification error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+    }
+
+    // --- GALLERY LAUNCHER ---
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            capturedImageUri = uri
+            // Run Classification
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+
+                val results = classifier.classify(bitmap)
+                if (results.isNotEmpty()) {
+                    val topResult = results[0]
+                    category = classifier.mapLabelToCategory(topResult)
+                    isAutoClassified = true
+                    Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "No classification results found", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Classification error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -357,8 +392,30 @@ fun ReportItemScreen(navController: NavController) {
                         contentDescription = "Captured Image",
                         modifier = Modifier.fillMaxSize()
                     )
-                    Button(
-                        onClick = {
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                                if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                                    tempImageUri = createImageUri(context)
+                                    cameraLauncher.launch(tempImageUri)
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                                }
+                            }
+                        ) {
+                            Text("Retake")
+                        }
+                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+                            Text("Gallery")
+                        }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Button(onClick = {
                             val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
                             if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
                                 tempImageUri = createImageUri(context)
@@ -366,22 +423,12 @@ fun ReportItemScreen(navController: NavController) {
                             } else {
                                 permissionLauncher.launch(Manifest.permission.CAMERA)
                             }
-                        },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
-                    ) {
-                        Text("Retake")
-                    }
-                } else {
-                    Button(onClick = {
-                        val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                            tempImageUri = createImageUri(context)
-                            cameraLauncher.launch(tempImageUri)
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.CAMERA)
+                        }) {
+                            Text("Take Photo")
                         }
-                    }) {
-                        Text("Take Photo")
+                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+                            Text("Gallery")
+                        }
                     }
                 }
             }
@@ -445,46 +492,49 @@ fun ReportItemScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Category Dropdown
-            Box(modifier = Modifier.fillMaxWidth()) {
+            val categories = listOf(
+                "Phone / Tablet", "Keys", "Wallet", "Glasses / Sunglasses", "Headphones / Earbuds", 
+                "Backpacks / Bags", "Umbrellas", "Water Bottles", "Clothing", "Chargers / Cables", 
+                "Watch", "Card", "Laptops / Tablets", "Hats / Beanies", "Books / Notebooks", "Envelope",
+                "Other"
+            )
+
+            ExposedDropdownMenuBox(
+                expanded = expandedCategory,
+                onExpandedChange = { expandedCategory = !expandedCategory },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 OutlinedTextField(
                     value = category,
-                    onValueChange = { category = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coordinates ->
-                            textFieldSize = coordinates.size.toSize()
-                        },
+                    onValueChange = {},
+                    readOnly = true,
                     label = { Text("Category") },
-                    trailingIcon = {
-                        Icon(iconCategory, "contentDescription",
-                            Modifier.clickable { expandedCategory = !expandedCategory })
-                    },
-                    readOnly = true // Make it read-only so keyboard doesn't pop up
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                 )
-
-                // Transparent clickable surface to cover the text field for dropdown trigger
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clickable { expandedCategory = !expandedCategory }
-                )
-
-                DropdownMenu(
+                ExposedDropdownMenu(
                     expanded = expandedCategory,
-                    onDismissRequest = { expandedCategory = false },
-                    modifier = Modifier
-                        .width(with(LocalDensity.current) { textFieldSize.width.toDp() })
+                    onDismissRequest = { expandedCategory = false }
                 ) {
-                    categories.forEach { label ->
+                    categories.forEach { selectionOption ->
                         DropdownMenuItem(
-                            text = { Text(text = label) },
+                            text = { Text(selectionOption) },
                             onClick = {
-                                category = label
+                                category = selectionOption
                                 expandedCategory = false
+                                isAutoClassified = false // User manually changed it
                             }
                         )
                     }
                 }
+            }
+            if (isAutoClassified) {
+                Text(
+                    text = "✨ Automatically categorized by AI",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
