@@ -18,11 +18,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.lostandfound.R
+import com.example.lostandfound.data.AuthManager
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.*
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 // --- SCREEN 1: LOGIN (REAL FIREBASE AUTH) ---
@@ -44,7 +46,7 @@ fun LoginScreen(navController: NavController) {
     // Toggles between Login and Register
     var isLoginMode by remember { mutableStateOf(true) }
     // Toggles between Email and Phone tabs
-    var selectedTab by remember { mutableStateOf(0) } // 0 for Email, 1 for Phone
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 for Email, 1 for Phone
 
     // Phone Auth State
     var verificationId by remember { mutableStateOf("") }
@@ -94,7 +96,9 @@ fun LoginScreen(navController: NavController) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

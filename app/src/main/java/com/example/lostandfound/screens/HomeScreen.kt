@@ -18,6 +18,7 @@ import com.example.lostandfound.data.AuthManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.utils.seedDatabase
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,6 +26,7 @@ import com.example.lostandfound.model.FoundItem
 fun HomeScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
+    var seedResult by remember { mutableStateOf("") }
 
     var showResolvedDialog by remember { mutableStateOf(false) }
     var itemToResolve by remember { mutableStateOf<FoundItem?>(null) }
@@ -81,6 +83,14 @@ fun HomeScreen(navController: NavController) {
                 title = { Text("Lost & Found") },
                 actions = {
                     if (isAdmin) {
+                        IconButton(onClick = {
+                            seedDatabase { result ->
+                                seedResult = result
+                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                            }
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Seed Database")
+                        }
 
                     }
                     TextButton(onClick = {
