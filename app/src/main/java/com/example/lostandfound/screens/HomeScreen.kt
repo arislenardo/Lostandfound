@@ -172,6 +172,71 @@ fun HomeScreen(navController: NavController) {
             }
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Row 2.5: Potential Matches (Non-Admin Only)
+            if (!isAdmin) {
+                var unreadCount by remember { mutableStateOf(0) }
+                val db = FirebaseFirestore.getInstance()
+                val userId = currentUser?.uid
+                
+                LaunchedEffect(userId) {
+                    if (userId != null) {
+                        db.collection("match_notifications")
+                            .whereEqualTo("lostItemOwnerId", userId)
+                            .whereEqualTo("status", "UNREAD")
+                            .get()
+                            .addOnSuccessListener { result ->
+                                unreadCount = result.size()
+                            }
+                    }
+                }
+                
+                Card(
+                    onClick = { navController.navigate("my_matches") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (unreadCount > 0) 
+                            MaterialTheme.colorScheme.primaryContainer 
+                        else 
+                            MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    elevation = CardDefaults.cardElevation(if (unreadCount > 0) 4.dp else 1.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Potential Matches",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    "Items matching your lost reports",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (unreadCount > 0) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ) {
+                                Text("$unreadCount")
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Row 3: Admin Only (Search & Claims)
             if (isAdmin) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {

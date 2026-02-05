@@ -69,7 +69,8 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                 .get()
                 .addOnSuccessListener { snapshot ->
                     if (!snapshot.isEmpty) {
-                        userClaim = snapshot.documents[0].toObject(Claim::class.java)
+                        val doc = snapshot.documents[0]
+                        userClaim = doc.toObject(Claim::class.java)?.copy(id = doc.id)
                     }
                 }
         }
@@ -267,6 +268,21 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                 if (isAdmin) {
                                     DetailRowLabel("User ID", item!!.userId)
                                     DetailRowLabel("Record ID", item!!.id)
+                                    
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Button(
+                                        onClick = {
+                                            db.collection("found_items").document(item!!.id).update("status", "RETURNED")
+                                                .addOnSuccessListener {
+                                                    Toast.makeText(context, "Item marked as RETURNED", Toast.LENGTH_SHORT).show()
+                                                    navController.popBackStack()
+                                                }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Mark as Returned (Archive)")
+                                    }
                                 }
                             }
                         }
@@ -305,11 +321,36 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                     if (userClaim!!.status == "APPROVED") {
                                         Text("Your claim has been approved! Please pick up the item at the station.", style = MaterialTheme.typography.bodyMedium)
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        DetailRowLabel("Finder Email", item!!.email) // Show contact info now!
+                                        DetailRowLabel("Finder Email", item!!.email)
                                     } else if (userClaim!!.status == "PENDING") {
                                         Text("Your proof is currently being reviewed by an officer.", style = MaterialTheme.typography.bodyMedium)
                                     } else {
-                                        Text("Your claim was rejected. Please contact the station for more info.", style = MaterialTheme.typography.bodyMedium)
+                                        Text("Your claim was rejected. Please check your proof details.", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        // Message the admin who rejected the claim
+                                        if (userClaim!!.reviewedBy.isNotBlank()) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val adminName = userClaim!!.reviewerEmail.substringBefore("@")
+                                                    navController.navigate("chat/${userClaim!!.reviewedBy}/${adminName}")
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("Message Admin About Rejection")
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(
+                                            onClick = {
+                                                db.collection("claims").document(userClaim!!.id).delete()
+                                                    .addOnSuccessListener { userClaim = null } 
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Remove Claim & Try Again")
+                                        }
                                     }
                                 }
                             }

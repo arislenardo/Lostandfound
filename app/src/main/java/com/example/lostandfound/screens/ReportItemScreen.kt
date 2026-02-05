@@ -43,6 +43,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
+import com.example.lostandfound.model.MatchNotification
 import com.example.lostandfound.utils.findLostMatches
 import androidx.compose.material.icons.filled.Add
 import com.example.lostandfound.utils.TFLiteClassifier
@@ -218,7 +219,23 @@ fun ReportItemScreen(navController: NavController) {
 
         db.collection("found_items")
             .add(newItem)
-            .addOnSuccessListener {
+            .addOnSuccessListener { foundItemRef ->
+                // Create match notifications for potential owners
+                if (potentialOwners.isNotEmpty()) {
+                    potentialOwners.forEach { (lostItem, score) ->
+                        val notification = MatchNotification(
+                            lostItemId = lostItem.id,
+                            foundItemId = foundItemRef.id,
+                            lostItemOwnerId = lostItem.userId,
+                            lostItemName = lostItem.name,
+                            foundItemName = itemName,
+                            matchScore = score,
+                            status = "UNREAD",
+                            createdAt = java.util.Date()
+                        )
+                        db.collection("match_notifications").add(notification)
+                    }
+                }
                 isSubmitting = false
                 Toast.makeText(context, "Report Submitted!", Toast.LENGTH_SHORT).show()
                 navController.popBackStack()
@@ -257,10 +274,12 @@ fun ReportItemScreen(navController: NavController) {
                                     Text(item.description, style = MaterialTheme.typography.bodySmall)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     if (item.userId.isNotBlank()) {
-                                        Button(onClick = {
-                                            val displayName = if (item.email.contains("@")) item.email.substringBefore("@") else "User"
-                                            navController.navigate("chat/${item.userId}/$displayName")
-                                        }, modifier = Modifier.fillMaxWidth()) { Text("Message Owner") }
+                                        // Police Station Mode: No direct messaging
+                                        Text(
+                                            "Match Detected. Submit report for officer verification.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.tertiary
+                                        )
                                     }
                                 }
                             }
@@ -482,7 +501,10 @@ fun ReportItemScreen(navController: NavController) {
                                 coroutineScope.launch {
                                     isCheckingMatches = true
                                     db.collection("lost_items").get().addOnSuccessListener { result ->
-                                        val allLostItems = result.toObjects(LostItem::class.java)
+                                        // FIX: Include document ID in each LostItem
+                                        val allLostItems = result.documents.mapNotNull { doc ->
+                                            doc.toObject(LostItem::class.java)?.copy(id = doc.id)
+                                        }
                                         coroutineScope.launch {
                                             val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, allLostItems) }
                                             isCheckingMatches = false

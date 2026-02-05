@@ -5,7 +5,8 @@ import androidx.compose.ui.graphics.Color
 // Police Station Palette
 val PoliceNavy = Color(0xFF1B263B) // Primary
 val PoliceSteel = Color(0xFF778DA9) // Secondary
-val PoliceGold = Color(0xFFFFD700) // Accent/Tertiary
+val PoliceGold = Color(0xFFFFD700) // Accent/Tertiary (for dark mode)
+val PoliceDarkGold = Color(0xFFB8860B) // Readable gold for light mode
 val PoliceWhite = Color(0xFFF7F7F7) // Background
 val PoliceBlack = Color(0xFF0D1B2A) // Surface
 

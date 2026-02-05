@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -42,7 +43,13 @@ fun AdminClaimsScreen(navController: NavController) {
     }
 
     fun updateStatus(claim: Claim, newStatus: String) {
-        db.collection("claims").document(claim.id).update("status", newStatus)
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val updates = hashMapOf<String, Any>(
+            "status" to newStatus,
+            "reviewedBy" to (currentUser?.uid ?: ""),
+            "reviewerEmail" to (currentUser?.email ?: "")
+        )
+        db.collection("claims").document(claim.id).update(updates)
             .addOnSuccessListener {
                 claims = claims.filter { it.id != claim.id } // Remove from waiting list
                 Toast.makeText(context, "Claim $newStatus", Toast.LENGTH_SHORT).show()
@@ -81,7 +88,15 @@ fun AdminClaimsScreen(navController: NavController) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(claims) { claim ->
-                    ClaimReviewCard(claim = claim, onApprove = { updateStatus(claim, "APPROVED") }, onReject = { updateStatus(claim, "REJECTED") })
+                    ClaimReviewCard(
+                        claim = claim,
+                        onApprove = { updateStatus(claim, "APPROVED") },
+                        onReject = { updateStatus(claim, "REJECTED") },
+                        onMessage = {
+                            val userName = claim.userEmail.substringBefore("@")
+                            navController.navigate("chat/${claim.userId}/${userName}")
+                        }
+                    )
                 }
             }
         }
@@ -89,7 +104,7 @@ fun AdminClaimsScreen(navController: NavController) {
 }
 
 @Composable
-fun ClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit) {
+fun ClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit, onMessage: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
@@ -102,7 +117,15 @@ fun ClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit) {
             Text(claim.proofDescription, style = MaterialTheme.typography.bodyMedium)
             
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onMessage,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Message")
+                }
                 OutlinedButton(
                     onClick = onReject,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
@@ -111,7 +134,6 @@ fun ClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Reject")
                 }
-                Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onApprove,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)

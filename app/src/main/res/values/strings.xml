@@ -45,6 +45,7 @@
     <string name="checking_matches">Checking for matches...</string>
     <string name="submitting">Submitting...</string>
     <string name="submit_report_button">Submit Report</string>
+    <string name="view_details_claim_button">View Details to Claim</string>
     <string name="email_subject_inquiry">Found Item Inquiry: %s</string>
     <string name="email_body_inquiry">Hello, I think the %s you found matches what I lost. Please contact me.</string>
     <string name="no_email_app_error">No email app found</string>

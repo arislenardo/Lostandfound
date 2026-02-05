@@ -26,9 +26,10 @@ fun LostItemsScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
     val isAdmin = AuthManager.isCurrentUserAdmin()
 
-    // Initial load
+    // Initial load - Filter out "RETURNED" items
     LaunchedEffect(Unit) {
         db.collection("found_items")
+            .whereEqualTo("status", "Found") // Only show active found items
             .orderBy("dateFound", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .limit(100)
             .get()

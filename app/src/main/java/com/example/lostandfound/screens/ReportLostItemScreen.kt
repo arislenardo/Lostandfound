@@ -246,7 +246,10 @@ fun ReportLostItemScreen(navController: NavController) {
         scope.launch {
             isCheckingMatches = true
             db.collection("found_items").get().addOnSuccessListener { result ->
-                val allFoundItems = result.toObjects(FoundItem::class.java)
+                // FIX: Include document ID in each FoundItem
+                val allFoundItems = result.documents.mapNotNull { doc ->
+                    doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
+                }
                 scope.launch {
                     val matches = withContext(Dispatchers.Default) {
                         findPotentialMatches(itemName, description, allFoundItems)
@@ -294,10 +297,12 @@ fun ReportLostItemScreen(navController: NavController) {
                                     Text(item.description, style = MaterialTheme.typography.bodySmall)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     if (item.userId.isNotBlank()) {
+                                        // Police Station Mode: No direct messaging
                                         Button(onClick = {
-                                            val displayName = if (item.email.contains("@")) item.email.substringBefore("@") else "User"
-                                            navController.navigate("chat/${item.userId}/$displayName")
-                                        }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.message_finder_button)) }
+                                            navController.navigate("found_item_detail/${item.id}")
+                                        }, modifier = Modifier.fillMaxWidth()) {
+                                            Text(stringResource(R.string.view_details_claim_button))
+                                        }
                                     }
                                 }
                             }

@@ -10,5 +10,7 @@ data class Claim(
     val userEmail: String = "",
     val proofDescription: String = "",
     val status: String = "PENDING", // PENDING, APPROVED, REJECTED
+    val reviewedBy: String = "",     // Admin userId who reviewed
+    val reviewerEmail: String = "",  // Admin email for display
     val timestamp: Date = Date()
 )
