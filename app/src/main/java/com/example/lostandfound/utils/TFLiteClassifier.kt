@@ -17,7 +17,7 @@ class TFLiteClassifier(val context: Context) {
     }
 
     private fun setupClassifier() {
-        val optionsBuilder = ValidatedImageClassifierOptions.Builder()
+        val optionsBuilder = ValidatedImageClassifierOptions.builder()
             .setScoreThreshold(0.5f)
             .setMaxResults(3)
 

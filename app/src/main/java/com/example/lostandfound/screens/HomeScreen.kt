@@ -7,6 +7,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -126,15 +127,7 @@ fun HomeScreen(navController: NavController) {
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (isAdmin) {
-                ActionCard(
-                    title = "Search Found Items",
-                    description = "Search database for found items.",
-                    icon = Icons.Default.Search,
-                    onClick = { navController.navigate("lost") }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+
 
             ActionCard(
                 title = "I Found Something",
@@ -143,6 +136,17 @@ fun HomeScreen(navController: NavController) {
                 onClick = { navController.navigate("report") }
             )
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (isAdmin) {
+                ActionCard(
+                    title = "View All Found Items",
+                    description = "Search database for found items.",
+                    icon = Icons.Default.Search,
+                    onClick = { navController.navigate("lost") }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             ActionCard(
                 title = if (isAdmin) "View All Lost Items" else "My Reported Items",
                 description = if (isAdmin) "Review all items reported as lost by users." else "View the status of items you have reported as lost.",
@@ -154,7 +158,7 @@ fun HomeScreen(navController: NavController) {
             ActionCard(
                 title = "Messages",
                 description = "View your conversations.",
-                icon = Icons.Default.Email,
+                icon = Icons.AutoMirrored.Filled.Send,
                 onClick = { navController.navigate("conversations") }
             )
 

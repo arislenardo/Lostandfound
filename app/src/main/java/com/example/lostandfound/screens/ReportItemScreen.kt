@@ -1,4 +1,4 @@
-package com.example.lostandfound.screens
+package com.example.lostandfound.screens 
 
 import android.Manifest
 import android.content.Context
@@ -44,6 +44,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.utils.findLostMatches
+import com.example.lostandfound.utils.TFLiteClassifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -105,7 +106,6 @@ fun ReportItemScreen(navController: NavController) {
     var showOwnerDialog by remember { mutableStateOf(false) }
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
 
-    val context = LocalContext.current
     val classifier = remember { TFLiteClassifier(context) } // Initialize Classifier
 
     val cameraLauncher = rememberLauncherForActivityResult(
