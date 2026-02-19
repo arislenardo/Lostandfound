@@ -38,6 +38,21 @@ fun LostItemsScreen(navController: NavController) {
                     doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
                 }
             }
+            .addOnFailureListener { e ->
+                // Log the error to help debug (e.g. missing index)
+                e.printStackTrace()
+                android.util.Log.e("LostItemsScreen", "Error loading found items", e)
+                
+                // Show toast so user knows something went wrong
+                android.widget.Toast.makeText(
+                    navController.context, 
+                    "Error loading items: ${e.localizedMessage}", 
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                
+                // If the error message contains "index", it's likely a missing index.
+                // The logcat will have the direct link to create it.
+            }
     }
 
     Scaffold(
