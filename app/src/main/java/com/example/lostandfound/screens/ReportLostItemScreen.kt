@@ -259,7 +259,7 @@ fun ReportLostItemScreen(navController: NavController) {
                 }
                 scope.launch {
                     val matches = withContext(Dispatchers.Default) {
-                        findPotentialMatches(itemName, description, allFoundItems)
+                        findPotentialMatches(itemName, description, category, allFoundItems)
                     }
                     isCheckingMatches = false
                     if (matches.isNotEmpty()) {
@@ -439,7 +439,7 @@ fun ReportLostItemScreen(navController: NavController) {
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         // Category
-                        val categories = listOf("Phone / Tablet", "Keys", "Wallet", "Glasses", "Headphones", "Bag", "Clothing", "Laptop", "Other")
+                        val categories = listOf("Backpacks / Bags", "Books / Notebooks", "Card", "Chargers / Cables", "Clothing", "Folder / Envelopes", "Glasses / Sunglasses", "Hats", "Headphones / Earbuds", "Keys", "Laptops", "Phone / Tablet", "Umbrellas", "Wallet", "Watch", "Water Bottles", "Others")
                         ExposedDropdownMenuBox(
                             expanded = expandedCategory,
                             onExpandedChange = { expandedCategory = !expandedCategory }

@@ -420,7 +420,7 @@ fun ReportItemScreen(navController: NavController) {
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         // Category
-                        val categories = listOf("Phone / Tablet", "Keys", "Wallet", "Glasses", "Headphones", "Bag", "Clothing", "Laptop", "Other")
+                        val categories = listOf("Backpacks / Bags", "Books / Notebooks", "Card", "Chargers / Cables", "Clothing", "Folder / Envelopes", "Glasses / Sunglasses", "Hats", "Headphones / Earbuds", "Keys", "Laptops", "Phone / Tablet", "Umbrellas", "Wallet", "Watch", "Water Bottles", "Others")
                         ExposedDropdownMenuBox(
                             expanded = expandedCategory,
                             onExpandedChange = { expandedCategory = !expandedCategory }
@@ -526,7 +526,7 @@ fun ReportItemScreen(navController: NavController) {
                                             doc.toObject(LostItem::class.java)?.copy(id = doc.id)
                                         }
                                         coroutineScope.launch {
-                                            val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, allLostItems) }
+                                            val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, allLostItems) }
                                             isCheckingMatches = false
                                             if (matches.isNotEmpty()) {
                                                 potentialOwners = matches
