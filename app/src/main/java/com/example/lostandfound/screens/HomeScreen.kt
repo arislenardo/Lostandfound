@@ -42,6 +42,7 @@ fun HomeScreen(navController: NavController) {
     }
 
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     val themeConfig = LocalThemeConfig.current
 
     val displayName = currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User"
@@ -51,6 +52,29 @@ fun HomeScreen(navController: NavController) {
 
     // (Dialog code removed or kept if needed - keeping logic minimal for dashboard focus)
     // Assuming dialog logic resides elsewhere or is triggered by list view, keeping it dormant here is fine.
+
+    // Logout confirmation dialog
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Log Out") },
+            text = { Text("Are you sure you want to log out?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLogoutDialog = false
+                    auth.signOut()
+                    navController.navigate("login") { popUpTo("home") { inclusive = true } }
+                }) {
+                    Text("Log Out", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -76,10 +100,7 @@ fun HomeScreen(navController: NavController) {
                         }
 
                     }
-                    TextButton(onClick = {
-                        auth.signOut()
-                        navController.navigate("login") { popUpTo("home") { inclusive = true } }
-                    }) {
+                    TextButton(onClick = { showLogoutDialog = true }) {
                         Text("Logout", color = MaterialTheme.colorScheme.error)
                     }
                 }

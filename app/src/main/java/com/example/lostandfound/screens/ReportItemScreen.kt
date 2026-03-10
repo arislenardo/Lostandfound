@@ -247,9 +247,16 @@ fun ReportItemScreen(navController: NavController) {
         if (isSubmitting) return
         isSubmitting = true
         coroutineScope.launch {
-            val imageUrl = capturedImageUri?.let { uploadImageToStorage(it) }
-            withContext(Dispatchers.Main) {
-                saveToFirestore(imageUrl)
+            try {
+                val imageUrl = capturedImageUri?.let { uploadImageToStorage(it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "found_items") }
+                withContext(Dispatchers.Main) {
+                    saveToFirestore(imageUrl)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isSubmitting = false
+                    Toast.makeText(context, "Upload failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }

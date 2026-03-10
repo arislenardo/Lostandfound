@@ -232,10 +232,20 @@ fun ReportLostItemScreen(navController: NavController) {
     }
 
     fun finalizeReportUpload() {
+        if (isSubmitting) return
+        isSubmitting = true
         coroutineScope.launch {
-            isSubmitting = true
-            val imageUrl = selectedImageUri?.let { uploadImageToStorage(it) }
-            saveToFirestore(imageUrl)
+            try {
+                val imageUrl = selectedImageUri?.let { uploadImageToStorage(it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "lost_items") }
+                withContext(Dispatchers.Main) {
+                    saveToFirestore(imageUrl)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isSubmitting = false
+                    Toast.makeText(context, "Upload failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
