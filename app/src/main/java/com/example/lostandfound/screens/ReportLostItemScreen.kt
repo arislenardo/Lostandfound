@@ -2,7 +2,7 @@ package com.example.lostandfound.screens
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
+
 import android.content.pm.PackageManager
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -19,8 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,12 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.google.android.gms.location.LocationServices
@@ -46,6 +42,7 @@ import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.R
 import com.example.lostandfound.utils.findPotentialMatches
+import com.example.lostandfound.utils.uploadImageToStorage
 import com.example.lostandfound.utils.TFLiteClassifier
 import androidx.compose.material.icons.filled.Add
 import kotlinx.coroutines.CoroutineScope
@@ -348,7 +345,7 @@ fun ReportLostItemScreen(navController: NavController) {
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.report_lost_item_title), style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
-                    IconButton(onClick = { if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) navController.popBackStack() }) {
+                    IconButton(onClick = { if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_content_description))
                     }
                 },
@@ -547,14 +544,3 @@ fun ReportLostItemScreen(navController: NavController) {
     }
 }
 
-suspend fun uploadImageToStorage(imageUri: Uri): String? {
-    val storageRef = FirebaseStorage.getInstance().reference
-    val imageRef = storageRef.child("images/${UUID.randomUUID()}")
-    return try {
-        imageRef.putFile(imageUri).await()
-        val downloadUrl = imageRef.downloadUrl.await()
-        downloadUrl.toString()
-    } catch (e: Exception) {
-        null
-    }
-}

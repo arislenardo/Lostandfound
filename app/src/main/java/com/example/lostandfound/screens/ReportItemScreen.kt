@@ -2,7 +2,7 @@ package com.example.lostandfound.screens
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
+
 import android.content.pm.PackageManager
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -19,8 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,11 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
@@ -45,6 +41,7 @@ import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.model.MatchNotification
 import com.example.lostandfound.utils.findLostMatches
+import com.example.lostandfound.utils.uploadImageToStorage
 import androidx.compose.material.icons.filled.Add
 import com.example.lostandfound.utils.TFLiteClassifier
 import kotlinx.coroutines.Dispatchers
@@ -201,8 +198,7 @@ fun ReportItemScreen(navController: NavController) {
 
     val db = FirebaseFirestore.getInstance()
 
-    fun saveToFirestore() {
-        isSubmitting = true
+    fun saveToFirestore(imageUrl: String? = null) {
         val newItem = FoundItem(
             userId = currentUser?.uid ?: "",
             email = currentUser?.email ?: "",
@@ -214,6 +210,7 @@ fun ReportItemScreen(navController: NavController) {
             category = category,
             dateFound = dateFound,
             dateFoundText = dateFoundText,
+            imageUrl = imageUrl ?: "",
             status = "Found"
         )
 
@@ -244,6 +241,17 @@ fun ReportItemScreen(navController: NavController) {
                 isSubmitting = false
                 Toast.makeText(context, "Error submitting report", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    fun finalizeReportUpload() {
+        if (isSubmitting) return
+        isSubmitting = true
+        coroutineScope.launch {
+            val imageUrl = capturedImageUri?.let { uploadImageToStorage(it) }
+            withContext(Dispatchers.Main) {
+                saveToFirestore(imageUrl)
+            }
+        }
     }
 
     // --- POPUPS & DIALOGS ---
@@ -287,7 +295,7 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showOwnerDialog = false; saveToFirestore() }) { Text("Continue to Submit") } },
+            confirmButton = { TextButton(onClick = { showOwnerDialog = false; finalizeReportUpload() }) { Text("Continue to Submit") } },
             dismissButton = { TextButton(onClick = { showOwnerDialog = false }) { Text("Cancel") } }
         )
     }
@@ -316,7 +324,12 @@ fun ReportItemScreen(navController: NavController) {
             CenterAlignedTopAppBar(
                 title = { Text("REPORT FOUND ITEM", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { 
+                        if (navController.previousBackStackEntry != null && 
+                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack() 
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
@@ -512,12 +525,12 @@ fun ReportItemScreen(navController: NavController) {
                                                 potentialOwners = matches
                                                 showOwnerDialog = true
                                             } else {
-                                                saveToFirestore()
+                                                finalizeReportUpload()
                                             }
                                         }
                                     }.addOnFailureListener {
                                         isCheckingMatches = false
-                                        saveToFirestore()
+                                        finalizeReportUpload()
                                     }
                                 }
                             }

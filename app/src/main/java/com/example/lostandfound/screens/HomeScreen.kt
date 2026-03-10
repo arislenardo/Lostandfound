@@ -33,8 +33,7 @@ fun HomeScreen(navController: NavController) {
     val context = LocalContext.current
     var seedResult by remember { mutableStateOf("") }
 
-    var showResolvedDialog by remember { mutableStateOf(false) }
-    var itemToResolve by remember { mutableStateOf<FoundItem?>(null) }
+
     val currentUser = auth.currentUser
     var isAdmin by remember { mutableStateOf(AuthManager.isCurrentUserAdmin()) }
 
@@ -48,18 +47,7 @@ fun HomeScreen(navController: NavController) {
     val displayName = currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User"
     val firstName = displayName.split(" ").firstOrNull() ?: displayName
 
-    fun markAsResolved(item: FoundItem) {
-        val db = FirebaseFirestore.getInstance()
-        db.collection("found_items").document(item.id)
-            .update("status", "Resolved")
-            .addOnSuccessListener {
-                Toast.makeText(context, "Item marked as resolved!", Toast.LENGTH_SHORT).show()
-                navController.navigate("home") { popUpTo("home") { inclusive = true } }
-            }
-            .addOnFailureListener {
-                Toast.makeText(context, "Failed to update status", Toast.LENGTH_SHORT).show()
-            }
-    }
+
 
     // (Dialog code removed or kept if needed - keeping logic minimal for dashboard focus)
     // Assuming dialog logic resides elsewhere or is triggered by list view, keeping it dormant here is fine.
@@ -283,7 +271,7 @@ fun HomeScreen(navController: NavController) {
 @Composable
 fun DashboardCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Card(
-        modifier = modifier.height(120.dp), // Square-ish
+        modifier = modifier.height(140.dp), // Square-ish, explicitly tall enough for 2 lines
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         onClick = onClick
@@ -295,7 +283,14 @@ fun DashboardCard(title: String, icon: androidx.compose.ui.graphics.vector.Image
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                text = title, 
+                style = MaterialTheme.typography.titleMedium, 
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                minLines = 1,
+                maxLines = 2
+            )
         }
     }
 }

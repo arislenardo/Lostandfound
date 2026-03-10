@@ -55,7 +55,8 @@ fun MyMatchesScreen(navController: NavController) {
                 title = { Text("Potential Matches") },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                        if (navController.previousBackStackEntry != null && 
+                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
                             navController.popBackStack()
                         }
                     }) {

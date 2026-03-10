@@ -19,6 +19,8 @@ import com.example.lostandfound.model.LostItem
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,7 +135,7 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                     IconButton(onClick = {
                         if (isEditing) {
                             isEditing = false
-                        } else if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                        } else if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
                             navController.popBackStack()
                         }
                     }) {
@@ -181,6 +183,16 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                if (item!!.imageUrl.isNotBlank() && !isEditing) {
+                    Card(modifier = Modifier.fillMaxWidth().height(200.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+                        AsyncImage(
+                            model = item!!.imageUrl,
+                            contentDescription = "Item Image",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
                 if (isEditing) {
                     // --- EDIT MODE UI ---
                     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
