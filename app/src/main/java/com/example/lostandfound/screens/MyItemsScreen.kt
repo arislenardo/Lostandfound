@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -28,31 +29,39 @@ import coil.compose.AsyncImage
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyItemsScreen(navController: NavController) {
-    var myLostItems by remember { mutableStateOf<List<LostItem>>(emptyList()) }
     val db = FirebaseFirestore.getInstance()
     val isAdmin = AuthManager.isCurrentUserAdmin()
     val currentUserId = AuthManager.getCurrentUserId()
 
-    LaunchedEffect(key1 = isAdmin, key2 = currentUserId) {
-        var query: Query = db.collection("lost_items")
+    var allItems by remember { mutableStateOf<List<LostItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var searchQuery by remember { mutableStateOf("") }
+    var currentPage by remember { mutableStateOf(0) }
 
-        if (!isAdmin) {
-            currentUserId?.let {
-                query = query.whereEqualTo("userId", it)
-            }
-        }
-
-        query.orderBy("dateLost", Query.Direction.DESCENDING).get()
+    LaunchedEffect(isAdmin, currentUserId) {
+        var q: Query = db.collection("lost_items")
+        if (!isAdmin) currentUserId?.let { q = q.whereEqualTo("userId", it) }
+        q.orderBy("dateLost", Query.Direction.DESCENDING).limit(500).get()
             .addOnSuccessListener { result ->
-                myLostItems = result.documents.mapNotNull { doc ->
+                allItems = result.documents.mapNotNull { doc ->
                     doc.toObject(LostItem::class.java)?.copy(id = doc.id)
                 }
+                isLoading = false
             }
-            .addOnFailureListener { e ->
-                e.printStackTrace()
-                android.util.Log.e("MyItemsScreen", "Error loading lost items", e)
-            }
+            .addOnFailureListener { isLoading = false }
     }
+
+    val filteredItems = remember(allItems, searchQuery) {
+        if (searchQuery.isBlank()) allItems
+        else allItems.filter { it.name.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true) }
+    }
+    LaunchedEffect(searchQuery) { currentPage = 0 }
+
+    val totalPages = maxOf(1, (filteredItems.size + 10 - 1) / 10)
+    val safePage = currentPage.coerceIn(0, totalPages - 1)
+    val pageItems = filteredItems.drop(safePage * 10).take(10)
+    val listState = rememberLazyListState()
+    LaunchedEffect(safePage) { listState.scrollToItem(0) }
 
     Scaffold(
         topBar = {
@@ -87,28 +96,66 @@ fun MyItemsScreen(navController: NavController) {
             )
         }
     ) { paddingValues ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            // Search bar (admin sees all items; non-admin won't have many)
+            if (isAdmin) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search by name or location...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    singleLine = true
+                )
+            }
 
-            if (myLostItems.isEmpty()) {
+            if (!isLoading) {
+                val start = if (filteredItems.isEmpty()) 0 else safePage * 10 + 1
+                val end = minOf((safePage + 1) * 10, filteredItems.size)
+                Text(
+                    text = "Showing $start–$end of ${filteredItems.size} results",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            if (isLoading) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (filteredItems.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Search, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("No lost items have been reported yet.", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary)
+                        Text(
+                            if (searchQuery.isBlank()) "No lost items have been reported yet." else "No results for \"$searchQuery\".",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(myLostItems) { item ->
+                    items(pageItems) { item ->
                         LostItemCard(item = item, navController = navController, isAdmin = isAdmin)
                     }
                 }
+                PaginationBar(
+                    currentPage = safePage,
+                    totalPages = totalPages,
+                    onPageSelected = { currentPage = it }
+                )
             }
         }
     }
@@ -140,6 +187,8 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean)
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
+                Text(text = item.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
                     Spacer(modifier = Modifier.width(4.dp))

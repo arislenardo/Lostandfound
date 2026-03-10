@@ -236,7 +236,7 @@ fun HomeScreen(navController: NavController) {
                     )
                     DashboardCard(
                         title = "Review Claims",
-                        icon = Icons.Default.Person, // Using Person as proxy for "User Claims"
+                        icon = Icons.Default.Person,
                         modifier = Modifier.weight(1f),
                         onClick = { navController.navigate("admin_claims") }
                     )
