@@ -15,7 +15,10 @@ object ChatManager {
         
         db.collection("messages")
             .add(message)
-            .addOnSuccessListener { onSuccess() }
+            .addOnSuccessListener { doc ->
+                db.collection("messages").document(doc.id).update("id", doc.id)
+                onSuccess()
+            }
             .addOnFailureListener { onFailure(it) }
     }
 

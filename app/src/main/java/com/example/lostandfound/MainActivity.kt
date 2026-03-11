@@ -101,8 +101,20 @@ fun LostAndFoundApp() {
         composable("admin_claims") {
             AdminClaimsScreen(navController = navController)
         }
+        composable("notification_inbox") {
+            NotificationInboxScreen(navController = navController)
+        }
         composable("my_matches") {
             MyMatchesScreen(navController = navController)
+        }
+        composable("browse_by_category") {
+            BrowseByCategoryScreen(navController = navController)
+        }
+        composable("profile") {
+            ProfileScreen(navController = navController)
+        }
+        composable("history") {
+            HistoryScreen(navController = navController)
         }
     }
 }

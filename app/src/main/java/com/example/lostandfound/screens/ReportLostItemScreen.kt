@@ -21,7 +21,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.example.lostandfound.ui.theme.CityTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +50,7 @@ import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.R
 import com.example.lostandfound.utils.findPotentialMatches
 import com.example.lostandfound.utils.uploadImageToStorage
+import com.example.lostandfound.utils.getReadableAddress
 import com.example.lostandfound.utils.TFLiteClassifier
 import androidx.compose.material.icons.filled.Add
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +62,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import com.google.maps.android.compose.*
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.LatLng
+import androidx.compose.material.icons.filled.MyLocation
 
 // Function to create a temporary image file uri
 private fun createImageUri(context: Context): Uri {
@@ -90,6 +103,11 @@ fun ReportLostItemScreen(navController: NavController) {
     var isCheckingMatches by remember { mutableStateOf(false) }
     var isFetchingLocation by remember { mutableStateOf(false) }
     var showNoImageWarning by remember { mutableStateOf(false) }
+
+    // Map State
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(16.0359, 120.3601), 15f)
+    }
 
     // Date Picker State
     var showDatePicker by remember { mutableStateOf(false) }
@@ -215,12 +233,44 @@ fun ReportLostItemScreen(navController: NavController) {
             category = category,
             dateLost = dateObj ?: Date(),
             imageUrl = imageUrl ?: "",
-            status = "Lost"
+            status = "Lost",
+            createdAt = Date()
         )
 
         db.collection("lost_items")
             .add(newItem)
-            .addOnSuccessListener {
+            .addOnSuccessListener { lostItemRef ->
+                // 1. Persist potential matches as notifications
+                potentialMatches.forEach { (foundItem, score) ->
+                    val matchNotif = com.example.lostandfound.model.MatchNotification(
+                        lostItemId = lostItemRef.id,
+                        foundItemId = foundItem.id,
+                        lostItemOwnerId = currentUser?.uid ?: "",
+                        lostItemName = itemName,
+                        foundItemName = foundItem.name,
+                        matchScore = score,
+                        status = "UNREAD",
+                        createdAt = java.util.Date()
+                    )
+                    db.collection("match_notifications").add(matchNotif).addOnSuccessListener { ref ->
+                        ref.update("id", ref.id)
+                    }
+                }
+
+                // 2. Check if user is admin, if so, log it
+                if (com.example.lostandfound.data.AuthManager.isCurrentUserAdmin()) {
+                    val action = com.example.lostandfound.model.AdminAction(
+                        adminId = currentUser?.uid ?: "",
+                        adminName = currentUser?.email ?: "",
+                        actionType = "ADDED_LOST_ITEM",
+                        itemTitle = itemName,
+                        itemId = lostItemRef.id
+                    )
+                    db.collection("admin_history").add(action).addOnSuccessListener { doc ->
+                        db.collection("admin_history").document(doc.id).update("id", doc.id)
+                    }
+                }
+
                 isSubmitting = false
                 Toast.makeText(context, "Report Submitted", Toast.LENGTH_SHORT).show()
                 navController.navigate("home") { popUpTo("home") { inclusive = true } }
@@ -351,18 +401,21 @@ fun ReportLostItemScreen(navController: NavController) {
 
     // --- MAIN UI ---
     Scaffold(
+        containerColor = CityTheme.Cream,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.report_lost_item_title), style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = {
-                    IconButton(onClick = { if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_content_description))
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("REPORT LOST ITEM", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                        Text("Submit a Lost Item", fontSize = 11.sp, color = CityTheme.GoldLight)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary
-                )
+                navigationIcon = {
+                    IconButton(onClick = { if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_content_description), tint = CityTheme.White)
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
             )
         }
     ) { padding ->
@@ -373,12 +426,17 @@ fun ReportLostItemScreen(navController: NavController) {
             // SECTION 1: PHOTO
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Item Photo", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(CityTheme.Gold))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Item Photo", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         Box(
                             modifier = Modifier
@@ -397,8 +455,8 @@ fun ReportLostItemScreen(navController: NavController) {
                                 Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Preview", modifier = Modifier.fillMaxSize())
                             } else {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.secondary)
-                                    Text("Tap to add photo", color = MaterialTheme.colorScheme.secondary)
+                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(40.dp), tint = CityTheme.Green.copy(alpha = 0.5f))
+                                    Text("Tap to add photo", color = CityTheme.Brown.copy(alpha = 0.4f))
                                 }
                             }
                         }
@@ -413,11 +471,15 @@ fun ReportLostItemScreen(navController: NavController) {
                                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                                     }
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CityTheme.Green)
                             ) { Text("Camera") }
                             OutlinedButton(
                                 onClick = { imagePickerLauncher.launch("image/*") },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CityTheme.Green)
                             ) { Text("Gallery") }
                         }
                     }
@@ -427,12 +489,17 @@ fun ReportLostItemScreen(navController: NavController) {
             // SECTION 2: DETAILS
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Item Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(CityTheme.Gold))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Item Details", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text(stringResource(R.string.item_name_label)) }, modifier = Modifier.fillMaxWidth())
@@ -462,7 +529,7 @@ fun ReportLostItemScreen(navController: NavController) {
                             }
                         }
                         if (isAutoClassified) {
-                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top=4.dp))
+                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = CityTheme.Gold, modifier = Modifier.padding(top=4.dp))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -489,12 +556,17 @@ fun ReportLostItemScreen(navController: NavController) {
             // SECTION 3: LOCATION
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Location", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(CityTheme.Gold))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Location", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
@@ -512,16 +584,59 @@ fun ReportLostItemScreen(navController: NavController) {
                                             if (loc != null) {
                                                 latitude = loc.latitude
                                                 longitude = loc.longitude
-                                                location = "${loc.latitude}, ${loc.longitude}"
+                                                coroutineScope.launch {
+                                                    location = getReadableAddress(context, loc.latitude, loc.longitude)
+                                                    cameraPositionState.animate(
+                                                        CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f)
+                                                    )
+                                                }
                                             }
                                         }
                                 } else {
                                     locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                                 }
                             }) {
-                                if (isFetchingLocation) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Icon(Icons.Default.LocationOn, null)
+                                if (isFetchingLocation) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Icon(Icons.Default.MyLocation, null)
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Google Map Picker
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(250.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .shadow(2.dp)
+                        ) {
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState,
+                                onMapClick = { latLng ->
+                                    latitude = latLng.latitude
+                                    longitude = latLng.longitude
+                                    coroutineScope.launch {
+                                        location = getReadableAddress(context, latLng.latitude, latLng.longitude)
+                                    }
+                                }
+                            ) {
+                                if (latitude != null && longitude != null) {
+                                    Marker(
+                                        state = MarkerState(position = LatLng(latitude!!, longitude!!)),
+                                        title = "Lost Location",
+                                        draggable = true
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Text(
+                            "Tap map to pin exact location",
+                            fontSize = 11.sp,
+                            color = CityTheme.Brown.copy(0.5f),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                 }
             }
@@ -529,8 +644,11 @@ fun ReportLostItemScreen(navController: NavController) {
             // SUBMIT
             item {
                 if (isSubmitting || isCheckingMatches) {
-                    CircularProgressIndicator()
-                    Text(if (isCheckingMatches) stringResource(R.string.checking_matches) else stringResource(R.string.submitting))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(color = CityTheme.Green)
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (isCheckingMatches) stringResource(R.string.checking_matches) else stringResource(R.string.submitting), color = CityTheme.Brown.copy(alpha = 0.6f))
+                    }
                 } else {
                     Button(
                         onClick = {
@@ -542,10 +660,11 @@ fun ReportLostItemScreen(navController: NavController) {
                                 startMatchingAndUpload(context, db, coroutineScope)
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = MaterialTheme.shapes.medium
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
                     ) {
-                        Text(stringResource(R.string.submit_report_button), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.submit_report_button), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
                 Spacer(modifier = Modifier.height(32.dp))

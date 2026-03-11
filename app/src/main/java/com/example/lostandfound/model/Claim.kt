@@ -12,5 +12,7 @@ data class Claim(
     val status: String = "PENDING", // PENDING, APPROVED, REJECTED
     val reviewedBy: String = "",     // Admin userId who reviewed
     val reviewerEmail: String = "",  // Admin email for display
+    val itemName: String = "",       // Added for notifications and admin view
+    val imageUrl: String = "",       // Proof photo for the claim
     val timestamp: Date = Date()
 )

@@ -1,214 +1,347 @@
 package com.example.lostandfound.screens
 
-import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.lostandfound.data.AuthManager
+import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.lostandfound.model.FoundItem
-import androidx.compose.material.icons.filled.Settings
-import com.example.lostandfound.ui.theme.LocalThemeConfig
-import com.example.lostandfound.utils.seedDatabase
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
-    val context = LocalContext.current
-    var seedResult by remember { mutableStateOf("") }
-
+    val db = FirebaseFirestore.getInstance()
 
     val currentUser = auth.currentUser
     var isAdmin by remember { mutableStateOf(AuthManager.isCurrentUserAdmin()) }
+    var userName by remember { mutableStateOf(currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User") }
 
     LaunchedEffect(Unit) {
         isAdmin = AuthManager.refreshAdminStatus()
+        
+        // Fetch name from users collection
+        if (currentUser != null) {
+            db.collection("users").document(currentUser.uid).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.exists()) {
+                        val name = doc.getString("name")
+                        if (!name.isNullOrBlank()) {
+                            userName = name
+                        }
+                    }
+                }
+        }
     }
 
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    val firstName = userName.split(" ").firstOrNull() ?: userName
+
+    // ── Live notification count (unread messages + new matches) ──────────────
+    val userId = currentUser?.uid
+    var notifCount by remember { mutableStateOf(0) }
+    var unreadMsgs by remember { mutableStateOf(0) }
+    var unreadMatches by remember { mutableStateOf(0) }
+    var pendingClaims by remember { mutableStateOf(0) }
+    var unreadClaimUpdates by remember { mutableStateOf(0) }
+
+    LaunchedEffect(unreadMsgs, unreadMatches, pendingClaims, unreadClaimUpdates) {
+        notifCount = unreadMsgs + unreadMatches + pendingClaims + unreadClaimUpdates
+    }
+
+    DisposableEffect(userId) {
+        if (userId == null) return@DisposableEffect onDispose { }
+        val msgListener = db.collection("messages")
+            .whereEqualTo("receiverId", userId)
+            .whereEqualTo("isRead", false)
+            .addSnapshotListener { snap, _ ->
+                unreadMsgs = snap?.size() ?: 0
+            }
+        onDispose { msgListener.remove() }
+    }
+
+    DisposableEffect(userId) {
+        if (userId == null) return@DisposableEffect onDispose { }
+        val matchListener = db.collection("match_notifications")
+            .whereEqualTo("lostItemOwnerId", userId)
+            .whereEqualTo("status", "UNREAD")
+            .addSnapshotListener { snap, _ ->
+                unreadMatches = snap?.size() ?: 0
+            }
+        onDispose { matchListener.remove() }
+    }
+
+    DisposableEffect(isAdmin) {
+        if (!isAdmin) {
+            pendingClaims = 0
+            return@DisposableEffect onDispose { }
+        }
+        val claimListener = db.collection("claims")
+            .whereIn("status", listOf("PENDING", "DISPUTED"))
+            .addSnapshotListener { snap, _ ->
+                pendingClaims = snap?.size() ?: 0
+            }
+        onDispose { claimListener.remove() }
+    }
+
+    DisposableEffect(userId) {
+        if (userId == null) return@DisposableEffect onDispose { }
+        val claimNotifListener = db.collection("claim_notifications")
+            .whereEqualTo("userId", userId)
+            .whereEqualTo("isRead", false)
+            .addSnapshotListener { snap, _ ->
+                unreadClaimUpdates = snap?.size() ?: 0
+            }
+        onDispose { claimNotifListener.remove() }
+    }
+
     var showLogoutDialog by remember { mutableStateOf(false) }
-    val themeConfig = LocalThemeConfig.current
 
-    val displayName = currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User"
-    val firstName = displayName.split(" ").firstOrNull() ?: displayName
-
-
-
-    // (Dialog code removed or kept if needed - keeping logic minimal for dashboard focus)
-    // Assuming dialog logic resides elsewhere or is triggered by list view, keeping it dormant here is fine.
-
-    // Logout confirmation dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Log Out") },
-            text = { Text("Are you sure you want to log out?") },
+            shape = RoundedCornerShape(16.dp),
+            title = { Text("Log Out", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+            text = { Text("Are you sure you want to log out?", color = CityTheme.Brown.copy(alpha = 0.7f)) },
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutDialog = false
                     auth.signOut()
                     navController.navigate("login") { popUpTo("home") { inclusive = true } }
-                }) {
-                    Text("Log Out", color = MaterialTheme.colorScheme.error)
-                }
+                }) { Text("Log Out", color = CityTheme.Error, fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancel")
+                    Text("Cancel", color = CityTheme.Green)
                 }
             }
         )
     }
 
     Scaffold(
+        containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("STATION DASHBOARD", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("Official Lost & Found", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            "Lost & Found",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            color = CityTheme.White
+                        )
+                        Text(
+                            "Station Dashboard",
+                            fontSize = 11.sp,
+                            color = CityTheme.GoldLight
+                        )
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Theme Settings", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    if (isAdmin) {
-                        IconButton(onClick = {
-                            seedDatabase { result ->
-                                seedResult = result
-                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                    // Notification bell with badge
+                    BadgedBox(
+                        badge = {
+                            if (notifCount > 0) {
+                                Badge(containerColor = CityTheme.Gold) {
+                                    Text(
+                                        if (notifCount > 9) "9+" else "$notifCount",
+                                        fontSize = 10.sp,
+                                        color = CityTheme.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
+                        },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        IconButton(onClick = {
+                            navController.navigate("notification_inbox")
                         }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Seed Database", tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = CityTheme.White
+                            )
                         }
-
                     }
-                    TextButton(onClick = { showLogoutDialog = true }) {
-                        Text("Logout", color = MaterialTheme.colorScheme.error)
-                    }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = CityTheme.Green
+                )
             )
         },
+        bottomBar = {
+            AppBottomNavigation(
+                navController = navController,
+                currentRoute = "home",
+                isAdmin = isAdmin
+            )
+        }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // WELCOME HEADER
+
+            // ── Welcome banner ───────────────────────────────────────────────
             Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-                elevation = CardDefaults.cardElevation(4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+                    .shadow(6.dp, RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Brush.horizontalGradient(listOf(CityTheme.Green, CityTheme.GreenLight)))
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Filled.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            text = "Welcome, $firstName",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Text(
-                            text = if (isAdmin) "Administrator Access" else "Resident Access",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(CityTheme.Gold),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Person, null, tint = CityTheme.White, modifier = Modifier.size(26.dp))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Hello, $firstName",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CityTheme.White
+                            )
+                            Text(
+                                if (isAdmin) "Administrator" else "Resident",
+                                fontSize = 12.sp,
+                                color = CityTheme.GoldLight
+                            )
+                        }
+                        // Logout link
+                        TextButton(onClick = { showLogoutDialog = true }) {
+                            Text("Log out", color = CityTheme.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                        }
                     }
                 }
             }
 
-            Text("QUICK ACTIONS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(8.dp))
+            // ── Section label ────────────────────────────────────────────────
+            Text(
+                "QUICK ACTIONS",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = CityTheme.Brown.copy(alpha = 0.5f),
+                letterSpacing = 1.sp,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+            )
 
-            // DASHBOARD GRID
-            // Row 1: Reporting
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                DashboardCard(
+            // ── Row 1 ────────────────────────────────────────────────────────
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeDashboardCard(
                     title = "I Lost An Item",
+                    subtitle = "Report a lost item",
                     icon = Icons.Default.Add,
+                    iconBackground = CityTheme.GreenLight,
                     modifier = Modifier.weight(1f),
                     onClick = { navController.navigate("report_lost") }
                 )
-                DashboardCard(
+                HomeDashboardCard(
                     title = "I Found An Item",
-                    icon = androidx.compose.material.icons.Icons.Filled.Edit, // or Visibility
+                    subtitle = "Submit a found item",
+                    icon = Icons.Default.Edit,
+                    iconBackground = CityTheme.GoldLight,
                     modifier = Modifier.weight(1f),
                     onClick = { navController.navigate("report") }
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Row 2: Management
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                DashboardCard(
+            // ── Row 2 ────────────────────────────────────────────────────────
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeDashboardCard(
                     title = if (isAdmin) "View All Lost Items" else "My Reports",
+                    subtitle = if (isAdmin) "All lost records" else "Your lost reports",
                     icon = Icons.AutoMirrored.Filled.List,
+                    iconBackground = CityTheme.Brown,
                     modifier = Modifier.weight(1f),
                     onClick = { navController.navigate("my_items") }
                 )
-                DashboardCard(
+                HomeDashboardCard(
                     title = "Messages",
-                    icon = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send, // or Message
+                    subtitle = "Official communications",
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    iconBackground = CityTheme.GreenLight,
                     modifier = Modifier.weight(1f),
                     onClick = { navController.navigate("conversations") }
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Row 2.5: Potential Matches (Non-Admin Only)
+            // ── Potential Matches (non-admin only) ───────────────────────────
             if (!isAdmin) {
                 var unreadCount by remember { mutableStateOf(0) }
                 val db = FirebaseFirestore.getInstance()
                 val userId = currentUser?.uid
-                
+
                 LaunchedEffect(userId) {
                     if (userId != null) {
                         db.collection("match_notifications")
                             .whereEqualTo("lostItemOwnerId", userId)
                             .whereEqualTo("status", "UNREAD")
                             .get()
-                            .addOnSuccessListener { result ->
-                                unreadCount = result.size()
-                            }
+                            .addOnSuccessListener { unreadCount = it.size() }
                     }
                 }
-                
+
+                val hasUnread = unreadCount > 0
                 Card(
                     onClick = { navController.navigate("my_matches") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(if (hasUnread) 6.dp else 2.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (unreadCount > 0) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else 
-                            MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = if (hasUnread) CityTheme.Gold.copy(alpha = 0.12f) else CityTheme.White
                     ),
-                    elevation = CardDefaults.cardElevation(if (unreadCount > 0) 4.dp else 1.dp)
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    border = if (hasUnread) CardDefaults.outlinedCardBorder().copy(
+                        brush = Brush.horizontalGradient(listOf(CityTheme.Gold, CityTheme.GoldLight))
+                    ) else null
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -216,102 +349,131 @@ fun HomeScreen(navController: NavController) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    "Potential Matches",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    "Items matching your lost reports",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (hasUnread) CityTheme.Gold else CityTheme.Green.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Search, null,
+                                    tint = if (hasUnread) CityTheme.White else CityTheme.Green,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("Potential Matches", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = CityTheme.Brown)
+                                Text("Items matching your lost reports", fontSize = 12.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
+                            }
                         }
-                        if (unreadCount > 0) {
-                            Badge(
-                                containerColor = MaterialTheme.colorScheme.error
-                            ) {
-                                Text("$unreadCount")
+                        if (hasUnread) {
+                            Badge(containerColor = CityTheme.Gold) {
+                                Text("$unreadCount", color = CityTheme.White, fontSize = 11.sp)
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
             }
 
-            // Row 3: Admin Only (Search & Claims)
+            // ── Admin row ────────────────────────────────────────────────────
             if (isAdmin) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    DashboardCard(
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeDashboardCard(
                         title = "View All Found Items",
+                        subtitle = "All found records",
                         icon = Icons.Default.Search,
+                        iconBackground = CityTheme.GoldLight,
                         modifier = Modifier.weight(1f),
                         onClick = { navController.navigate("lost") }
                     )
-                    DashboardCard(
+                    HomeDashboardCard(
                         title = "Review Claims",
+                        subtitle = "Pending approvals",
                         icon = Icons.Default.Person,
+                        iconBackground = CityTheme.Brown,
                         modifier = Modifier.weight(1f),
                         onClick = { navController.navigate("admin_claims") }
                     )
                 }
-            }
-        }
-    }
-
-    if (showSettingsDialog) {
-        AlertDialog(
-            onDismissRequest = { showSettingsDialog = false },
-            title = { Text("App Settings") },
-            text = {
-                Column {
-                    Text("Customize your experience:", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Text("Dark Mode", modifier = Modifier.weight(1f))
-                        Switch(checked = themeConfig.isDark, onCheckedChange = { themeConfig.toggleDark() })
+                Spacer(Modifier.height(12.dp))
+                // Browse by Category — full-width card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    onClick = { navController.navigate("browse_by_category") }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CityTheme.Brown),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Widgets, null, tint = CityTheme.White, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Browse by Category", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = CityTheme.Brown)
+                            Text("Filter all lost & found items by type", fontSize = 12.sp, color = CityTheme.Brown.copy(0.5f))
+                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null, tint = CityTheme.Brown.copy(0.3f), modifier = Modifier.size(16.dp))
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showSettingsDialog = false }) {
-                    Text("Close")
-                }
             }
-        )
+
+            Spacer(Modifier.height(24.dp))
+        }
     }
 }
 
 @Composable
-fun DashboardCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun HomeDashboardCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconBackground: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = modifier.height(140.dp), // Square-ish, explicitly tall enough for 2 lines
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = modifier
+            .height(140.dp)
+            .shadow(4.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+        elevation = CardDefaults.cardElevation(0.dp),
         onClick = onClick
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = title, 
-                style = MaterialTheme.typography.titleMedium, 
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                minLines = 1,
-                maxLines = 2
-            )
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = CityTheme.White, modifier = Modifier.size(24.dp))
+            }
+            Column {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = CityTheme.Brown, maxLines = 2)
+                Text(subtitle, fontSize = 11.sp, color = CityTheme.Brown.copy(alpha = 0.5f), maxLines = 1)
+            }
         }
     }
 }

@@ -10,5 +10,6 @@ data class Message(
     val text: String = "",
     val timestamp: Date = Date(),
     val itemId: String = "", // Optional: Link chat to a specific item context
+    val imageUrl: String = "", // For sending photos in chat
     val isRead: Boolean = false
 )

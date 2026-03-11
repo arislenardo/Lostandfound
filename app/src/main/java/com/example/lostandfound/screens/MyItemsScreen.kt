@@ -1,30 +1,39 @@
 package com.example.lostandfound.screens
 
+import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.LostItem
+import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Locale
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.draw.clip
-import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,50 +41,63 @@ fun MyItemsScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
     val isAdmin = AuthManager.isCurrentUserAdmin()
     val currentUserId = AuthManager.getCurrentUserId()
+    val context = LocalContext.current
 
     var allItems by remember { mutableStateOf<List<LostItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
     var currentPage by remember { mutableStateOf(0) }
+    var filterDateMillis by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showFoundConfirm by remember { mutableStateOf(false) }
+    var itemToMarkFound by remember { mutableStateOf<LostItem?>(null) }
 
     LaunchedEffect(isAdmin, currentUserId) {
         var q: Query = db.collection("lost_items")
         if (!isAdmin) currentUserId?.let { q = q.whereEqualTo("userId", it) }
-        q.orderBy("dateLost", Query.Direction.DESCENDING).limit(500).get()
+        q.limit(500).get()
             .addOnSuccessListener { result ->
-                allItems = result.documents.mapNotNull { doc ->
-                    doc.toObject(LostItem::class.java)?.copy(id = doc.id)
-                }
+                allItems = result.documents.mapNotNull { doc -> 
+                    doc.toObject(LostItem::class.java)?.copy(id = doc.id) 
+                }.sortedWith(compareByDescending<LostItem> { it.createdAt?.time ?: 0L }.thenByDescending { it.dateLost.time })
                 isLoading = false
             }
             .addOnFailureListener { isLoading = false }
     }
 
-    val filteredItems = remember(allItems, searchQuery) {
-        if (searchQuery.isBlank()) allItems
+    val filteredItems = remember(allItems, searchQuery, filterDateMillis) {
+        val searchFiltered = if (searchQuery.isBlank()) allItems
         else allItems.filter { it.name.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true) }
+        
+        if (filterDateMillis != null) {
+            val sdf = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+            val filterStr = sdf.format(java.util.Date(filterDateMillis!!))
+            searchFiltered.filter { sdf.format(it.dateLost) == filterStr }
+        } else {
+            searchFiltered
+        }
     }
-    LaunchedEffect(searchQuery) { currentPage = 0 }
+    LaunchedEffect(searchQuery, filterDateMillis) { currentPage = 0 }
 
-    val totalPages = maxOf(1, (filteredItems.size + 10 - 1) / 10)
+    val totalPages = maxOf(1, (filteredItems.size + 9) / 10)
     val safePage = currentPage.coerceIn(0, totalPages - 1)
     val pageItems = filteredItems.drop(safePage * 10).take(10)
     val listState = rememberLazyListState()
     LaunchedEffect(safePage) { listState.scrollToItem(0) }
 
     Scaffold(
+        containerColor = CityTheme.Cream,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             if (isAdmin) "LOST ITEMS DATABASE" else "MY REPORTED ITEMS",
-                            style = MaterialTheme.typography.titleMedium
+                            fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White
                         )
                         Text(
                             if (isAdmin) "Official Station Records" else "Your Lost Item Reports",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary
+                            fontSize = 11.sp, color = CityTheme.GoldLight
                         )
                     }
                 },
@@ -86,153 +108,203 @@ fun MyItemsScreen(navController: NavController) {
                             navController.popBackStack()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
             )
         }
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // Search bar (admin sees all items; non-admin won't have many)
             if (isAdmin) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Search by name or location...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    label = { Text("Search by name or location…") },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = CityTheme.Green) },
+                    trailingIcon = {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(
+                                Icons.Default.DateRange,
+                                contentDescription = "Filter by date",
+                                tint = if (filterDateMillis != null) CityTheme.Gold else CityTheme.Green
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CityTheme.Green,
+                        unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.25f),
+                        focusedLabelColor = CityTheme.Green,
+                        cursorColor = CityTheme.Green
+                    )
                 )
+            }
+
+            if (showDatePicker) {
+                val datePickerState = rememberDatePickerState(initialSelectedDateMillis = filterDateMillis)
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            filterDateMillis = datePickerState.selectedDateMillis
+                            showDatePicker = false
+                        }) { Text("OK", color = CityTheme.Green) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            filterDateMillis = null
+                            showDatePicker = false
+                        }) { Text("Clear", color = CityTheme.Brown) }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
             }
 
             if (!isLoading) {
                 val start = if (filteredItems.isEmpty()) 0 else safePage * 10 + 1
                 val end = minOf((safePage + 1) * 10, filteredItems.size)
                 Text(
-                    text = "Showing $start–$end of ${filteredItems.size} results",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary,
+                    "Showing $start–$end of ${filteredItems.size} results",
+                    fontSize = 11.sp, color = CityTheme.Brown.copy(alpha = 0.5f),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
 
-            if (isLoading) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+            when {
+                isLoading -> Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
+                    CircularProgressIndicator(color = CityTheme.Green)
                 }
-            } else if (filteredItems.isEmpty()) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                filteredItems.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Search, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.surfaceVariant)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Icon(Icons.Default.Search, null, Modifier.size(56.dp), tint = CityTheme.Green.copy(0.3f))
+                        Spacer(Modifier.height(12.dp))
                         Text(
-                            if (searchQuery.isBlank()) "No lost items have been reported yet." else "No results for \"$searchQuery\".",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.secondary
+                            if (searchQuery.isBlank()) "No lost items reported yet." else "No results for \"$searchQuery\".",
+                            color = CityTheme.Brown.copy(alpha = 0.5f)
                         )
                     }
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(pageItems) { item ->
-                        LostItemCard(item = item, navController = navController, isAdmin = isAdmin)
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(pageItems) { item ->
+                            LostItemCard(
+                                item = item, 
+                                navController = navController, 
+                                isAdmin = isAdmin,
+                                onFound = {
+                                    itemToMarkFound = item
+                                    showFoundConfirm = true
+                                }
+                            )
+                        }
+                    }
+                    PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
+                }
+            }
+        }
+        
+        if (showFoundConfirm && itemToMarkFound != null) {
+            AlertDialog(
+                onDismissRequest = { showFoundConfirm = false },
+                shape = RoundedCornerShape(16.dp),
+                title = { Text("Item Found?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+                text = { Text("Are you sure? This will remove the '${itemToMarkFound!!.name}' report from the system. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            db.collection("lost_items").document(itemToMarkFound!!.id).delete()
+                                .addOnSuccessListener {
+                                    Toast.makeText(context, "Marked as Found!", Toast.LENGTH_SHORT).show()
+                                    allItems = allItems.filter { it.id != itemToMarkFound!!.id }
+                                }
+                            showFoundConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                    ) { Text("Yes, Found It") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showFoundConfirm = false }) {
+                        Text("Cancel", color = CityTheme.Brown)
                     }
                 }
-                PaginationBar(
-                    currentPage = safePage,
-                    totalPages = totalPages,
-                    onPageSelected = { currentPage = it }
-                )
-            }
+            )
         }
     }
 }
 
 @Composable
-fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean) {
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean, onFound: () -> Unit) {
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+    val context = LocalContext.current
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = isAdmin) {
-                navController.navigate("item_detail/${item.id}")
-            },
-        elevation = CardDefaults.cardElevation(2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier.fillMaxWidth().shadow(3.dp, RoundedCornerShape(14.dp))
+            .clickable(enabled = isAdmin) { navController.navigate("item_detail/${item.id}") },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Thumbnail or placeholder
             if (item.imageUrl.isNotBlank()) {
                 AsyncImage(
                     model = item.imageUrl,
                     contentDescription = "Thumbnail",
-                    modifier = Modifier
-                        .size(80.dp)
-                        .padding(end = 16.dp)
-                        .clip(MaterialTheme.shapes.medium),
+                    modifier = Modifier.size(68.dp).clip(RoundedCornerShape(10.dp)),
                     contentScale = ContentScale.Crop
                 )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = item.location, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Box(
+                    modifier = Modifier.size(68.dp).clip(RoundedCornerShape(10.dp))
+                        .background(CityTheme.Green.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("?", fontSize = 28.sp, color = CityTheme.Green.copy(alpha = 0.4f))
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Lost: ${dateFormat.format(item.dateLost)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.Brown)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, null, Modifier.size(13.dp), tint = CityTheme.Gold)
+                    Spacer(Modifier.width(3.dp))
+                    Text(item.location, fontSize = 12.sp, color = CityTheme.Brown.copy(alpha = 0.6f))
+                }
+                Spacer(Modifier.height(4.dp))
+                Text("Lost: ${dateFormat.format(item.dateLost)}", fontSize = 11.sp, color = CityTheme.Brown.copy(alpha = 0.4f))
 
                 if (isAdmin) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text(text = item.description, style = MaterialTheme.typography.bodySmall, maxLines = 2, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Reported by: ${item.email}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(Modifier.height(6.dp))
+                    HorizontalDivider(color = CityTheme.Brown.copy(0.08f))
+                    Spacer(Modifier.height(6.dp))
+                    Text(item.description, fontSize = 12.sp, maxLines = 2, color = CityTheme.Brown.copy(0.7f))
+                    Text("By: ${item.email}", fontSize = 10.sp, color = CityTheme.Brown.copy(0.4f))
                 }
 
-                // Self-Resolution: User can remove their own lost report
                 if (!isAdmin) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = {
-                            val db = FirebaseFirestore.getInstance()
-                            db.collection("lost_items").document(item.id).delete()
-                                .addOnSuccessListener {
-                                    android.widget.Toast.makeText(navController.context, "Marked as Found!", android.widget.Toast.LENGTH_SHORT).show()
-                                    navController.navigate("my_items") { launchSingleTop = true }
-                                }
-                        },
+                        onClick = onFound,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("I Found It (Remove)")
-                    }
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                    ) { Text("I Found It (Remove)", fontSize = 13.sp) }
                 }
             }
             if (isAdmin) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = CityTheme.Gold)
             }
         }
     }

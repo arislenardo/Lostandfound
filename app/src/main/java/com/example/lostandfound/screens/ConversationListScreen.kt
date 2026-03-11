@@ -1,19 +1,27 @@
 package com.example.lostandfound.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
-
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.lostandfound.model.Message
+import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -31,81 +39,73 @@ fun ConversationListScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(currentUserId) {
-        if (currentUserId.isBlank()) {
-            isLoading = false
-            return@LaunchedEffect
-        }
-
-        // Fetch messages where I am sender or receiver
-        // Note: Firestore OR queries are tricky. We'll do two queries or one collection group query if structured differently.
-        // Simplest for prototype: Listen to "messages" (inefficient for large scale, ok for MVP)
-        
+        if (currentUserId.isBlank()) { isLoading = false; return@LaunchedEffect }
         db.collection("messages").orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null) {
-                    isLoading = false
-                    return@addSnapshotListener
-                }
-
-                val allMessages = snapshot.toObjects(Message::class.java)
-                
-                // Group by the "other" person
-                val conversationsMap = mutableMapOf<String, Message>()
-                
-                for (msg in allMessages) {
-                    val otherid = if (msg.senderId == currentUserId) msg.receiverId else msg.senderId
-                    // If this is a message involving me
-                    if (msg.senderId == currentUserId || msg.receiverId == currentUserId) {
-                        // If we haven't seen this user yet, or this message is newer (list is already sorted desc)
-                        if (!conversationsMap.containsKey(otherid)) {
-                            conversationsMap[otherid] = msg
-                        }
+                if (e != null || snapshot == null) { isLoading = false; return@addSnapshotListener }
+                val allMessages = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        doc.toObject(Message::class.java)?.copy(id = doc.id)
+                    } catch (ex: Exception) {
+                        null // Prevent crash if a message is malformed
                     }
                 }
-                
+                val conversationsMap = mutableMapOf<String, Message>()
+                for (msg in allMessages) {
+                    val otherId = if (msg.senderId == currentUserId) msg.receiverId else msg.senderId
+                    if ((msg.senderId == currentUserId || msg.receiverId == currentUserId) && !conversationsMap.containsKey(otherId)) {
+                        conversationsMap[otherId] = msg
+                    }
+                }
                 uniqueConversations = conversationsMap.values.toList()
                 isLoading = false
             }
     }
 
     Scaffold(
+        containerColor = CityTheme.Cream,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("MESSAGES", style = MaterialTheme.typography.titleMedium)
-                        Text("Official Communications", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                        Text("MESSAGES", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                        Text("Official Communications", fontSize = 11.sp, color = CityTheme.GoldLight)
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { 
-                        if (navController.previousBackStackEntry != null && 
+                    IconButton(onClick = {
+                        if (navController.previousBackStackEntry != null &&
                             navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack() 
+                            navController.popBackStack()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
             )
         }
     ) { paddingValues ->
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+        when {
+            isLoading -> Box(Modifier.fillMaxSize().padding(paddingValues), Alignment.Center) {
+                CircularProgressIndicator(color = CityTheme.Green)
             }
-        } else if (uniqueConversations.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No messages yet")
+            uniqueConversations.isEmpty() -> Box(
+                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp), Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("📭", fontSize = 48.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Text("No messages yet", fontWeight = FontWeight.Bold, color = CityTheme.Brown)
+                    Text("Messages with officers will appear here.", fontSize = 13.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
+                }
             }
-        } else {
-            LazyColumn(modifier = Modifier.padding(paddingValues)) {
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 items(uniqueConversations) { lastMsg ->
-                    ConversationItem(lastMsg, currentUserId, navController)
+                    CityConversationItem(lastMsg, currentUserId, navController)
                 }
             }
         }
@@ -113,43 +113,61 @@ fun ConversationListScreen(navController: NavController) {
 }
 
 @Composable
-fun ConversationItem(message: Message, currentUserId: String, navController: NavController) {
+fun CityConversationItem(message: Message, currentUserId: String, navController: NavController) {
     val otherUserId = if (message.senderId == currentUserId) message.receiverId else message.senderId
-    // We ideally need the other user's name. 
-    // If I sent the last message, I need to know who I sent it to.
-    // If I received it, the senderName is there.
-    // Ideally user names should be stored in a "Users" collection to fetch.
-    // For now, if we don't have the name, we show "User". 
-    // Improvement: Fetch user name or pass it around. 
-    // HACK: If I am the sender, I don't know the receiver's name from this message struct easily unless I store receiverName too.
-    // But if I received it, I have senderName.
-    
-    val displayName = if (message.senderId != currentUserId) message.senderName else "User" // Fallback if I sent it
-    
-    // Better logic: We need to know who we are talking to.
-    // For the MVP, let's assume we can click to open chat and passing "User" is okay if unknown, 
-    // or we can fetch it. 
-    // Since we added `senderName`, let's rely on receiving messages to populate names, 
-    // or we simply navigate and let ChatScreen handle it (it accepts a name).
-
+    val displayName = if (message.senderId != currentUserId) message.senderName else "User"
     val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+    val initials = displayName.take(1).uppercase()
 
-    ListItem(
-        headlineContent = { Text(displayName.ifBlank { "User" }) },
-        supportingContent = { 
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(3.dp, RoundedCornerShape(14.dp))
+            .clickable { navController.navigate("chat/$otherUserId/${displayName.ifBlank { "User" }}") },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Avatar circle
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(CityTheme.Green),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(initials, color = CityTheme.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    displayName.ifBlank { "User" },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = CityTheme.Brown
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "${if (message.senderId == currentUserId) "You: " else ""}${message.text}",
+                    maxLines = 1,
+                    fontSize = 12.sp,
+                    color = CityTheme.Brown.copy(alpha = 0.5f)
+                )
+            }
             Text(
-                text = "${if (message.senderId == currentUserId) "You: " else ""}${message.text}",
-                maxLines = 1
-            ) 
-        },
-        trailingContent = { Text(dateFormat.format(message.timestamp)) },
-        modifier = Modifier.clickable {
-            // Navigate to chat
-            // Issue: If displayName is "User", it looks ugly. 
-            // Real fix: Store receiverName in Message or fetch User profile. 
-            // Proceeding with what we have.
-            navController.navigate("chat/$otherUserId/${displayName.ifBlank { "User" }}")
+                dateFormat.format(message.timestamp),
+                fontSize = 10.sp,
+                color = CityTheme.Brown.copy(alpha = 0.4f)
+            )
         }
-    )
-    HorizontalDivider()
+    }
 }
+
+// Legacy alias
+@Composable
+fun ConversationItem(message: Message, currentUserId: String, navController: NavController) =
+    CityConversationItem(message, currentUserId, navController)

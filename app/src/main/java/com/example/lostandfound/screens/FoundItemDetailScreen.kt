@@ -1,309 +1,356 @@
 package com.example.lostandfound.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.example.lostandfound.data.AuthManager
-import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.model.AdminAction
 import com.example.lostandfound.model.Claim
+import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import com.example.lostandfound.utils.uploadImageToStorage
+import com.example.lostandfound.utils.getReadableAddress
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.ImageDecoder
+import android.os.Build
+import android.provider.MediaStore
+import androidx.compose.foundation.Image
+import coil.compose.rememberAsyncImagePainter
+import com.google.maps.android.compose.*
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.CameraUpdateFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FoundItemDetailScreen(navController: NavController, itemId: String) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
-    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+    val auth = FirebaseAuth.getInstance()
+    val currentUserId = auth.currentUser?.uid
     val isAdmin = AuthManager.isCurrentUserAdmin()
 
-    // Item State
     var item by remember { mutableStateOf<FoundItem?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-
-    // Edit Mode State
     var isEditing by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf("") }
     var editDescription by remember { mutableStateOf("") }
     var editLocation by remember { mutableStateOf("") }
-    
+    var editLatitude by remember { mutableStateOf<Double?>(null) }
+    var editLongitude by remember { mutableStateOf<Double?>(null) }
+    var cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(16.0359, 120.3601), 15f)
+    }
     var showDeleteDialog by remember { mutableStateOf(false) }
-
-    // Fetch Item & User's Claim Status
     var userClaim by remember { mutableStateOf<Claim?>(null) }
-    
+    val coroutineScope = rememberCoroutineScope()
+    var selectedClaimImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showReturnConfirm by remember { mutableStateOf(false) }
+    var showWithdrawConfirm by remember { mutableStateOf(false) }
+
+    val claimImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> selectedClaimImageUri = uri }
+
     LaunchedEffect(itemId) {
-        // 1. Fetch Item
         db.collection("found_items").document(itemId).get()
             .addOnSuccessListener { document ->
                 if (document != null && document.exists()) {
-                    val loadedItem = document.toObject(FoundItem::class.java)?.copy(id = document.id)
-                    item = loadedItem
-                    // Initialize edit fields
-                    if (loadedItem != null) {
-                        editName = loadedItem.name
-                        editDescription = loadedItem.description
-                        editLocation = loadedItem.location
+                    val loaded = document.toObject(FoundItem::class.java)?.copy(id = document.id)
+                    item = loaded
+                    loaded?.let { 
+                        editName = it.name
+                        editDescription = it.description
+                        editLocation = it.location
+                        editLatitude = it.latitude
+                        editLongitude = it.longitude
+                        
+                        if (it.latitude != null && it.longitude != null) {
+                            cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(it.latitude, it.longitude), 16f)
+                        }
                     }
                     isLoading = false
                 }
             }
-
-        // 2. Fetch User's Claim (if not admin/owner)
+    }
+    
+    // Reactive Claim Status Listener
+    DisposableEffect(itemId, currentUserId, isAdmin) {
         if (!isAdmin && currentUserId != null) {
-            db.collection("claims")
+            val listener = db.collection("claims")
                 .whereEqualTo("itemId", itemId)
                 .whereEqualTo("userId", currentUserId)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    if (!snapshot.isEmpty) {
+                .addSnapshotListener { snapshot, _ ->
+                    if (snapshot != null && !snapshot.isEmpty) {
                         val doc = snapshot.documents[0]
-                        userClaim = doc.toObject(Claim::class.java)?.copy(id = doc.id)
+                        val loaded = doc.toObject(Claim::class.java)?.copy(id = doc.id)
+                        
+                        // IF the status changed while looking at it, show a Toast
+                        if (userClaim != null && loaded != null && userClaim!!.status != loaded.status) {
+                            Toast.makeText(context, "Claim status updated to: ${loaded.status}", Toast.LENGTH_LONG).show()
+                        }
+                        
+                        userClaim = loaded
                     }
                 }
+            onDispose { listener.remove() }
+        } else {
+            onDispose { }
         }
     }
 
-    // UPDATE Function
     fun updateItem() {
         if (item == null) return
-
         db.collection("found_items").document(item!!.id)
-            .update(
-                mapOf(
-                    "name" to editName,
-                    "description" to editDescription,
-                    "location" to editLocation
-                )
-            )
+            .update(mapOf(
+                "name" to editName, 
+                "description" to editDescription, 
+                "location" to editLocation,
+                "latitude" to editLatitude,
+                "longitude" to editLongitude
+            ))
             .addOnSuccessListener {
-                Toast.makeText(context, "Item updated successfully", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Item updated", Toast.LENGTH_SHORT).show()
                 isEditing = false
-                // Update local state to reflect changes immediately
-                item = item!!.copy(
-                    name = editName,
-                    description = editDescription,
-                    location = editLocation
-                )
+                item = item!!.copy(name = editName, description = editDescription, location = editLocation)
             }
-            .addOnFailureListener {
-                Toast.makeText(context, "Failed to update item", Toast.LENGTH_SHORT).show()
-            }
+            .addOnFailureListener { Toast.makeText(context, "Failed to update", Toast.LENGTH_SHORT).show() }
     }
 
-    // DELETE Function
     fun deleteItem() {
-        if (item?.id != null) {
-            db.collection("found_items").document(item!!.id).delete()
-                .addOnSuccessListener {
-                    Toast.makeText(context, "Item deleted", Toast.LENGTH_SHORT).show()
-                    navController.popBackStack()
+        if (item == null) return
+        db.collection("found_items").document(item!!.id).delete()
+            .addOnSuccessListener {
+                if (isAdmin) {
+                    val currentUser = FirebaseAuth.getInstance().currentUser
+                    val action = AdminAction(
+                        adminId = currentUser?.uid ?: "",
+                        adminName = currentUser?.email ?: "",
+                        actionType = "DELETED_FOUND_ITEM",
+                        itemTitle = item!!.name,
+                        itemId = item!!.id
+                    )
+                    db.collection("admin_history").add(action).addOnSuccessListener { doc ->
+                        db.collection("admin_history").document(doc.id).update("id", doc.id)
+                    }.addOnFailureListener { e ->
+                        Toast.makeText(context, "Audit error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
-                .addOnFailureListener {
-                    Toast.makeText(context, "Error deleting item", Toast.LENGTH_SHORT).show()
-                }
-        }
+                Toast.makeText(context, "Item deleted", Toast.LENGTH_SHORT).show()
+                navController.popBackStack()
+            }
+            .addOnFailureListener { e -> Toast.makeText(context, "Error deleting: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Report?") },
-            text = { Text("Are you sure you want to remove this post? This cannot be undone.") },
+            shape = RoundedCornerShape(16.dp),
+            title = { Text("Delete Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+            text = { Text("Are you sure? This cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
             confirmButton = {
-                TextButton(onClick = {
-                    deleteItem()
-                    showDeleteDialog = false
-                }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { deleteItem(); showDeleteDialog = false }) {
+                    Text("Delete", color = CityTheme.Error, fontWeight = FontWeight.Bold)
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", color = CityTheme.Green) } }
         )
     }
 
     Scaffold(
+        containerColor = CityTheme.Cream,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
-                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (isEditing) "EDIT FOUND ITEM" else "FOUND ITEM DETAILS", style = MaterialTheme.typography.titleMedium)
-                        Text("Reference: #${itemId.take(8)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                     }
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (isEditing) "EDIT FOUND ITEM" else "FOUND ITEM DETAILS", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                        Text("Ref: #${itemId.take(8)}", fontSize = 11.sp, color = CityTheme.GoldLight)
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (isEditing) {
-                            isEditing = false
-                        } else if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                        if (isEditing) isEditing = false
+                        else if (navController.previousBackStackEntry != null &&
+                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
                             navController.popBackStack()
                         }
                     }) {
-                        Icon(
-                            if (isEditing) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(if (isEditing) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
                     }
                 },
                 actions = {
                     if (item != null && (item!!.userId == currentUserId || isAdmin)) {
                         if (isEditing) {
-                            // SAVE Button
                             IconButton(onClick = { updateItem() }) {
-                                Icon(Icons.Default.Check, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Default.Check, "Save", tint = CityTheme.GoldLight)
                             }
                         } else {
-                            // EDIT Button
-                            IconButton(onClick = { isEditing = true }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit")
-                            }
-                            // DELETE Button
-                            IconButton(onClick = { showDeleteDialog = true }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                            }
+                            IconButton(onClick = { isEditing = true }) { Icon(Icons.Default.Edit, "Edit", tint = CityTheme.White) }
+                            IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Default.Delete, "Delete", tint = CityTheme.GoldLight) }
                         }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
             )
         }
     ) { paddingValues ->
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                CircularProgressIndicator()
+        when {
+            isLoading -> Box(Modifier.fillMaxSize().padding(paddingValues), Alignment.Center) {
+                CircularProgressIndicator(color = CityTheme.Green)
             }
-        } else if (item != null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            item != null -> Column(
+                modifier = Modifier.fillMaxSize().padding(paddingValues).verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Image banner
                 if (item!!.imageUrl.isNotBlank() && !isEditing) {
-                    Card(modifier = Modifier.fillMaxWidth().height(200.dp), elevation = CardDefaults.cardElevation(2.dp)) {
-                        AsyncImage(
-                            model = item!!.imageUrl,
-                            contentDescription = "Item Image",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                    Card(Modifier.fillMaxWidth().height(200.dp).shadow(4.dp, RoundedCornerShape(16.dp)), RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                        AsyncImage(model = item!!.imageUrl, contentDescription = "Item Image", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                 }
+
                 if (isEditing) {
-                    // --- EDIT MODE UI ---
-                    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedTextField(
-                                value = editName,
-                                onValueChange = { editName = it },
-                                label = { Text("Item Name") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = editLocation,
-                                onValueChange = { editLocation = it },
-                                label = { Text("Location") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = editDescription,
-                                onValueChange = { editDescription = it },
-                                label = { Text("Description") },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 3
-                            )
+                    Card(Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(16.dp)), RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(CityTheme.White), elevation = CardDefaults.cardElevation(0.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = CityTheme.Green, unfocusedBorderColor = CityTheme.Brown.copy(0.25f), focusedLabelColor = CityTheme.Green, cursorColor = CityTheme.Green)
+                            OutlinedTextField(editName, { editName = it }, Modifier.fillMaxWidth(), label = { Text("Item Name") }, shape = RoundedCornerShape(12.dp), colors = fc)
+                            OutlinedTextField(editLocation, { editLocation = it }, Modifier.fillMaxWidth(), label = { Text("Location") }, shape = RoundedCornerShape(12.dp), colors = fc)
+                            
+                            // Map Picker in Edit Mode
+                            Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp))) {
+                                GoogleMap(
+                                    modifier = Modifier.fillMaxSize(),
+                                    cameraPositionState = cameraPositionState,
+                                    onMapClick = { latLng ->
+                                        editLatitude = latLng.latitude
+                                        editLongitude = latLng.longitude
+                                        coroutineScope.launch {
+                                            editLocation = getReadableAddress(context, latLng.latitude, latLng.longitude)
+                                        }
+                                    }
+                                ) {
+                                    if (editLatitude != null && editLongitude != null) {
+                                        Marker(state = MarkerState(position = LatLng(editLatitude!!, editLongitude!!)))
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(editDescription, { editDescription = it }, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3, shape = RoundedCornerShape(12.dp), colors = fc)
                         }
                     }
                 } else {
-                    // --- VIEW MODE UI ---
-                    val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
 
-                    // General Info Card
-                    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("ITEM INFORMATION", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            DetailRowLabel("Item Name", item!!.name)
-                            DetailRowLabel("Category", item!!.category)
-                            
-                            val dateString = try { dateFormat.format(item!!.dateFound) } catch(e: Exception) { "Unknown Date" }
-                            DetailRowLabel("Date Found", dateString)
-                        }
+                    CityDetailCard("ITEM INFORMATION") {
+                        DetailRowLabel("Item Name", item!!.name)
+                        DetailRowLabel("Category", item!!.category)
+                        DetailRowLabel("Date Found", try { dateFormat.format(item!!.dateFound) } catch (e: Exception) { "Unknown" })
                     }
-
-                    // Location & Description Card
-                    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("DETAILS & LOCATION", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            DetailRowLabel("Location", item!!.location)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Description:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
-                            Text(item!!.description, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-
-                    // Admin/Reporter Info
-                    if (isAdmin || item!!.userId == currentUserId) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(), 
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("ADMINISTRATION", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                DetailRowLabel("Reporter Email", item!!.email)
-                                if (isAdmin) {
-                                    DetailRowLabel("User ID", item!!.userId)
-                                    DetailRowLabel("Record ID", item!!.id)
-                                    
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Button(
-                                        onClick = {
-                                            db.collection("found_items").document(item!!.id).update("status", "RETURNED")
-                                                .addOnSuccessListener {
-                                                    Toast.makeText(context, "Item marked as RETURNED", Toast.LENGTH_SHORT).show()
-                                                    navController.popBackStack()
-                                                }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Mark as Returned (Archive)")
-                                    }
+                    CityDetailCard("DETAILS & LOCATION") {
+                        DetailRowLabel("Location", item!!.location)
+                        
+                        // Map in View Mode
+                        if (item!!.latitude != null && item!!.longitude != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp))) {
+                                GoogleMap(
+                                    modifier = Modifier.fillMaxSize(),
+                                    cameraPositionState = cameraPositionState,
+                                    uiSettings = MapUiSettings(zoomControlsEnabled = false, scrollGesturesEnabled = false, zoomGesturesEnabled = false, tiltGesturesEnabled = false, rotationGesturesEnabled = false)
+                                ) {
+                                    Marker(state = MarkerState(position = LatLng(item!!.latitude!!, item!!.longitude!!)))
                                 }
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+                        Text("Description", fontSize = 11.sp, color = CityTheme.Brown.copy(0.4f))
+                        Text(item!!.description, fontSize = 14.sp, color = CityTheme.Brown)
+                    }
+
+                    // Admin section
+                    if (isAdmin || item!!.userId == currentUserId) {
+                        CityDetailCard("ADMINISTRATION", tint = CityTheme.Gold) {
+                            DetailRowLabel("Reporter Email", item!!.email)
+                            if (isAdmin) {
+                                DetailRowLabel("User ID", item!!.userId)
+                                DetailRowLabel("Record ID", item!!.id)
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = { showReturnConfirm = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                                ) { Text("Mark as Returned (Archive)") }
                             }
                         }
                     }
 
-                    // CLAIM SECTION (For Residents)
+                    if (showReturnConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { showReturnConfirm = false },
+                            title = { Text("Mark as Returned?", fontWeight = FontWeight.Bold) },
+                            text = { Text("This will archive the item and inform the system it's no longer at the station. This action cannot be undone.") },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        db.collection("found_items").document(item!!.id).update("status", "RETURNED")
+                                            .addOnSuccessListener {
+                                                val action = com.example.lostandfound.model.AdminAction(
+                                                    adminId = currentUserId ?: "",
+                                                    adminName = auth.currentUser?.email ?: "",
+                                                    actionType = "RETURNED_ITEM",
+                                                    itemTitle = item?.name ?: "Unknown Item",
+                                                    itemId = item?.id ?: ""
+                                                )
+                                                db.collection("admin_history").add(action).addOnSuccessListener { doc ->
+                                                    db.collection("admin_history").document(doc.id).update("id", doc.id)
+                                                }
+                                                Toast.makeText(context, "Marked as RETURNED", Toast.LENGTH_SHORT).show()
+                                                navController.popBackStack()
+                                            }
+                                        showReturnConfirm = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                                ) { Text("Archive Item") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showReturnConfirm = false }) { Text("Cancel", color = CityTheme.Brown) }
+                            },
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                    }
+
+                    // Claim section (residents only)
                     if (!isAdmin && item!!.userId != currentUserId) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
                         var showClaimDialog by remember { mutableStateOf(false) }
                         var proofDescription by remember { mutableStateOf("") }
                         var isSubmittingClaim by remember { mutableStateOf(false) }
@@ -311,78 +358,145 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                         if (userClaim == null) {
                             Button(
                                 onClick = { showClaimDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
                             ) {
-                                Text("Claim This Item")
+                                Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Claim This Item", fontWeight = FontWeight.SemiBold)
                             }
                         } else {
-                            val statusColor = when(userClaim!!.status) {
-                                "APPROVED" -> MaterialTheme.colorScheme.primary
-                                "REJECTED" -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.tertiary
+                            val claimStatus = userClaim!!.status
+                            val statusColor = when (claimStatus) {
+                                "APPROVED" -> CityTheme.Green
+                                "REJECTED" -> CityTheme.Error
+                                else       -> CityTheme.Gold
                             }
-                            
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("CLAIM STATUS: ${userClaim!!.status}", style = MaterialTheme.typography.titleSmall, color = statusColor)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    if (userClaim!!.status == "APPROVED") {
-                                        Text("Your claim has been approved! Please pick up the item at the station.", style = MaterialTheme.typography.bodyMedium)
-                                        Spacer(modifier = Modifier.height(8.dp))
+                            CityDetailCard("MY CLAIM", tint = statusColor) {
+                                Box(
+                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(statusColor.copy(0.12f)).padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text("STATUS: $claimStatus", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = statusColor)
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                when (claimStatus) {
+                                    "APPROVED" -> {
+                                        Text("Your claim has been approved! Please pick up the item at the station.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
+                                        Spacer(Modifier.height(8.dp))
                                         DetailRowLabel("Finder Email", item!!.email)
-                                    } else if (userClaim!!.status == "PENDING") {
-                                        Text("Your proof is currently being reviewed by an officer.", style = MaterialTheme.typography.bodyMedium)
-                                    } else {
-                                        Text("Your claim was rejected. Please check your proof details.", style = MaterialTheme.typography.bodyMedium)
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        // Message the admin who rejected the claim
-                                        if (userClaim!!.reviewedBy.isNotBlank()) {
-                                            OutlinedButton(
-                                                onClick = {
-                                                    val adminName = userClaim!!.reviewerEmail.substringBefore("@")
-                                                    navController.navigate("chat/${userClaim!!.reviewedBy}/${adminName}")
-                                                },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text("Message Admin About Rejection")
-                                            }
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    "PENDING"  -> Text("Your proof is currently being reviewed by an officer.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
+                                    "REJECTED" -> {
+                                        Text("Your claim was rejected. If you believe this is a mistake, you can dispute the decision and message the reviewing officer to provide further proof.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
+                                        Spacer(Modifier.height(16.dp))
+                                        
+                                        // Combined Dispute & Message button
                                         Button(
                                             onClick = {
-                                                db.collection("claims").document(userClaim!!.id).delete()
-                                                    .addOnSuccessListener { userClaim = null } 
+                                                db.collection("claims").document(userClaim!!.id).update("status", "DISPUTED")
+                                                    .addOnSuccessListener {
+                                                        userClaim = userClaim?.copy(status = "DISPUTED")
+                                                        val adminName = if(userClaim!!.reviewerEmail.isNotBlank()) userClaim!!.reviewerEmail.substringBefore("@") else "Admin"
+                                                        navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName")
+                                                    }
                                             },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text("Remove Claim & Try Again")
+                                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Gold)
+                                        ) { 
+                                            Icon(Icons.Default.Gavel, null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Dispute & Message Officer", fontWeight = FontWeight.Bold) 
                                         }
+
+                                        Spacer(Modifier.height(12.dp))
+                                        TextButton(
+                                            onClick = { showWithdrawConfirm = true },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text("Withdraw Claim & Close", color = CityTheme.Error, fontSize = 12.sp) }
+
+                                        if (showWithdrawConfirm) {
+                                            AlertDialog(
+                                                onDismissRequest = { showWithdrawConfirm = false },
+                                                title = { Text("Withdraw Claim?", fontWeight = FontWeight.Bold) },
+                                                text = { Text("Are you sure you want to withdraw your claim for this item? You will need to submit a new one if you change your mind.") },
+                                                confirmButton = {
+                                                    Button(
+                                                        onClick = {
+                                                            db.collection("claims").document(userClaim!!.id).delete().addOnSuccessListener { 
+                                                                userClaim = null 
+                                                                showWithdrawConfirm = false
+                                                            }
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
+                                                    ) { Text("Withdraw") }
+                                                },
+                                                dismissButton = {
+                                                    TextButton(onClick = { showWithdrawConfirm = false }) { Text("Cancel", color = CityTheme.Brown) }
+                                                },
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                        }
+                                    }
+                                    "DISPUTED" -> {
+                                        Text("You have disputed this rejection. An officer will re-review your proof.", fontSize = 13.sp, color = CityTheme.Gold)
+                                        Spacer(Modifier.height(8.dp))
+                                        OutlinedButton(
+                                            onClick = { 
+                                                val adminName = if(userClaim!!.reviewerEmail.isNotBlank()) userClaim!!.reviewerEmail.substringBefore("@") else "Admin"
+                                                navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName") 
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CityTheme.Brown)
+                                        ) { Text("Message Reviewing Admin") }
                                     }
                                 }
                             }
                         }
 
-                        // CLAIM DIALOG
                         if (showClaimDialog) {
                             AlertDialog(
                                 onDismissRequest = { showClaimDialog = false },
-                                title = { Text("Secure Claim Verification") },
+                                shape = RoundedCornerShape(16.dp),
+                                title = { Text("Secure Claim Verification", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
                                 text = {
                                     Column {
-                                        Text("Please describe unique details about the item that only the owner would know (e.g., scratches, wallpaper, contents).", style = MaterialTheme.typography.bodyMedium)
-                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text("Provide details and any photo proof about the item to help officers verify ownership.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
+                                        Spacer(Modifier.height(14.dp))
+                                        
+                                        // Image Selector for Claim
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(150.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(CityTheme.Brown.copy(alpha = 0.05f))
+                                                .clickable { claimImagePicker.launch("image/*") },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (selectedClaimImageUri != null) {
+                                                AsyncImage(
+                                                    model = selectedClaimImageUri,
+                                                    contentDescription = "Selected Proof",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            } else {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Icon(Icons.Default.AddAPhoto, null, tint = CityTheme.Green.copy(0.5f))
+                                                    Text("Attach Photo Proof", fontSize = 12.sp, color = CityTheme.Brown.copy(0.4f))
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(14.dp))
                                         OutlinedTextField(
-                                            value = proofDescription,
-                                            onValueChange = { proofDescription = it },
-                                            label = { Text("Proof of Ownership") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            minLines = 3
+                                            value = proofDescription, onValueChange = { proofDescription = it },
+                                            label = { Text("Describe item details") }, modifier = Modifier.fillMaxWidth(), minLines = 3,
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CityTheme.Green, unfocusedBorderColor = CityTheme.Brown.copy(0.25f), focusedLabelColor = CityTheme.Green, cursorColor = CityTheme.Green)
                                         )
                                     }
                                 },
@@ -391,42 +505,56 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                         enabled = !isSubmittingClaim && proofDescription.isNotBlank(),
                                         onClick = {
                                             isSubmittingClaim = true
-                                            val newClaim = Claim(
-                                                itemId = item!!.id,
-                                                userId = currentUserId ?: "",
-                                                userEmail = FirebaseAuth.getInstance().currentUser?.email ?: "",
-                                                proofDescription = proofDescription,
-                                                timestamp = java.util.Date()
-                                            )
-                                            db.collection("claims").add(newClaim)
-                                                .addOnSuccessListener { ref ->
-                                                    // Update ID
-                                                    ref.update("id", ref.id)
-                                                    userClaim = newClaim.copy(id = ref.id)
-                                                    showClaimDialog = false
-                                                    isSubmittingClaim = false
-                                                    Toast.makeText(context, "Claim submitted for review!", Toast.LENGTH_LONG).show()
+                                            coroutineScope.launch {
+                                                try {
+                                                    val imageUrl = selectedClaimImageUri?.let {
+                                                        uploadImageToStorage(it, userId = currentUserId ?: "anon", userEmail = auth.currentUser?.email ?: "", itemType = "claims")
+                                                    } ?: ""
+                                                    
+                                                    val newClaim = Claim(
+                                                        itemId = item!!.id, 
+                                                        itemName = item!!.name,
+                                                        userId = currentUserId ?: "",
+                                                        userName = auth.currentUser?.displayName ?: "User",
+                                                        userEmail = auth.currentUser?.email ?: "",
+                                                        proofDescription = proofDescription,
+                                                        imageUrl = imageUrl,
+                                                        timestamp = java.util.Date()
+                                                    )
+                                                    
+                                                    withContext(Dispatchers.Main) {
+                                                        db.collection("claims").add(newClaim).addOnSuccessListener { ref ->
+                                                            ref.update("id", ref.id)
+                                                            showClaimDialog = false; isSubmittingClaim = false
+                                                            Toast.makeText(context, "Claim submitted for review!", Toast.LENGTH_LONG).show()
+                                                        }.addOnFailureListener { isSubmittingClaim = false }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    withContext(Dispatchers.Main) {
+                                                        isSubmittingClaim = false
+                                                        Toast.makeText(context, "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
-                                                .addOnFailureListener {
-                                                    isSubmittingClaim = false
-                                                    Toast.makeText(context, "Failed to submit claim.", Toast.LENGTH_SHORT).show()
-                                                }
-                                        }
-                                    ) {
-                                        Text("Submit Claim")
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) { 
+                                        if (isSubmittingClaim) CircularProgressIndicator(Modifier.size(20.dp), color = CityTheme.White)
+                                        else Text("Submit Claim") 
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { showClaimDialog = false }) { Text("Cancel") }
+                                    TextButton(onClick = { if (!isSubmittingClaim) showClaimDialog = false }) { Text("Cancel", color = CityTheme.Brown.copy(0.6f)) }
                                 }
                             )
                         }
                     }
                 }
+                Spacer(Modifier.height(16.dp))
             }
-        } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text("Item not found", color = MaterialTheme.colorScheme.error)
+            else -> Box(Modifier.fillMaxSize().padding(paddingValues), Alignment.Center) {
+                Text("Item not found", color = CityTheme.Error)
             }
         }
     }
@@ -435,7 +563,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
 @Composable
 fun DetailRowLabel(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-        Text(text = value, style = MaterialTheme.typography.bodyLarge)
+        Text(label, fontSize = 11.sp, color = CityTheme.Brown.copy(0.4f))
+        Text(value, fontSize = 14.sp, color = CityTheme.Brown, fontWeight = FontWeight.Medium)
     }
 }

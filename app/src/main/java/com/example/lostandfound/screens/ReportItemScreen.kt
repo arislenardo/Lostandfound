@@ -21,7 +21,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
+import com.example.lostandfound.ui.theme.CityTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,11 +45,13 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.model.MatchNotification
-import com.example.lostandfound.utils.findLostMatches
 import com.example.lostandfound.utils.uploadImageToStorage
+import com.example.lostandfound.utils.getReadableAddress
+import com.example.lostandfound.utils.findLostMatches
 import androidx.compose.material.icons.filled.Add
 import com.example.lostandfound.utils.TFLiteClassifier
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +61,11 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.google.maps.android.compose.*
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.LatLng
+import androidx.compose.material.icons.filled.MyLocation
 
 // Function to create a temporary image file uri
 private fun createImageUri(context: Context): Uri {
@@ -91,12 +106,18 @@ fun ReportItemScreen(navController: NavController) {
     var isCheckingMatches by remember { mutableStateOf(false) }
     var isFetchingLocation by remember { mutableStateOf(false) }
 
+    // Map State
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(16.0359, 120.3601), 15f)
+    }
+
     // Date Picker State
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
     // State for Algorithm Matches Dialog
     var showOwnerDialog by remember { mutableStateOf(false) }
+    var showSurrenderDialog by remember { mutableStateOf(false) }
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
 
     // Category Dropdown State
@@ -211,12 +232,27 @@ fun ReportItemScreen(navController: NavController) {
             dateFound = dateFound,
             dateFoundText = dateFoundText,
             imageUrl = imageUrl ?: "",
-            status = "Found"
+            status = "Found",
+            createdAt = Date()
         )
 
         db.collection("found_items")
             .add(newItem)
             .addOnSuccessListener { foundItemRef ->
+                // Check if user is admin, if so, log it
+                if (AuthManager.isCurrentUserAdmin()) {
+                    val action = com.example.lostandfound.model.AdminAction(
+                        adminId = currentUser?.uid ?: "",
+                        adminName = currentUser?.email ?: "",
+                        actionType = "ADDED_FOUND_ITEM",
+                        itemTitle = itemName,
+                        itemId = foundItemRef.id
+                    )
+                    db.collection("admin_history").add(action).addOnSuccessListener { doc ->
+                        db.collection("admin_history").document(doc.id).update("id", doc.id)
+                    }
+                }
+
                 // Create match notifications for potential owners
                 if (potentialOwners.isNotEmpty()) {
                     potentialOwners.forEach { (lostItem, score) ->
@@ -234,8 +270,7 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
                 isSubmitting = false
-                Toast.makeText(context, "Report Submitted!", Toast.LENGTH_SHORT).show()
-                navController.popBackStack()
+                showSurrenderDialog = true
             }
             .addOnFailureListener {
                 isSubmitting = false
@@ -307,6 +342,63 @@ fun ReportItemScreen(navController: NavController) {
         )
     }
 
+    if (showSurrenderDialog) {
+        AlertDialog(
+            onDismissRequest = { /* Prevent dismissal without confirm if needed, but let's allow it */ },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = CityTheme.White,
+            title = { 
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.LocationOn, null, tint = CityTheme.Green, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("REPORT SUBMITTED!", fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, fontSize = 20.sp)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Thank you for being a good citizen! To complete the process, please surrender the item to the:",
+                        textAlign = TextAlign.Center,
+                        color = CityTheme.Brown.copy(0.7f)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "CALASIAO POLICE STATION",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = CityTheme.Brown,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Present your Reference ID if requested: #${(itemName.hashCode().toString()).takeLast(6).uppercase()}",
+                        fontSize = 11.sp,
+                        color = CityTheme.Gold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSurrenderDialog = false
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("I Understand")
+                }
+            }
+        )
+    }
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -327,23 +419,26 @@ fun ReportItemScreen(navController: NavController) {
 
     // --- MAIN UI ---
     Scaffold(
+        containerColor = CityTheme.Cream,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("REPORT FOUND ITEM", style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = {
-                    IconButton(onClick = { 
-                        if (navController.previousBackStackEntry != null && 
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack() 
-                        }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("REPORT FOUND ITEM", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                        Text("Submit a Found Item", fontSize = 11.sp, color = CityTheme.GoldLight)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary
-                )
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (navController.previousBackStackEntry != null &&
+                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            navController.popBackStack()
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
             )
         }
     ) { padding ->
@@ -354,12 +449,17 @@ fun ReportItemScreen(navController: NavController) {
             // SECTION 1: PHOTO
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Item Photo", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(CityTheme.Gold))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Item Photo", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         Box(
                             modifier = Modifier
@@ -378,8 +478,8 @@ fun ReportItemScreen(navController: NavController) {
                                 Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
                             } else {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.secondary)
-                                    Text("Tap to add photo", color = MaterialTheme.colorScheme.secondary)
+                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(40.dp), tint = CityTheme.Green.copy(alpha = 0.5f))
+                                    Text("Tap to add photo", color = CityTheme.Brown.copy(alpha = 0.4f))
                                 }
                             }
                         }
@@ -394,11 +494,15 @@ fun ReportItemScreen(navController: NavController) {
                                         permissionLauncher.launch(Manifest.permission.CAMERA)
                                     }
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CityTheme.Green)
                             ) { Text("Camera") }
                             OutlinedButton(
                                 onClick = { imagePickerLauncher.launch("image/*") },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CityTheme.Green)
                             ) { Text("Gallery") }
                         }
                     }
@@ -408,12 +512,17 @@ fun ReportItemScreen(navController: NavController) {
             // SECTION 2: DETAILS
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Item Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(CityTheme.Gold))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Item Details", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text("What is it?") }, modifier = Modifier.fillMaxWidth())
@@ -443,7 +552,7 @@ fun ReportItemScreen(navController: NavController) {
                             }
                         }
                         if (isAutoClassified) {
-                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top=4.dp))
+                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = CityTheme.Gold, modifier = Modifier.padding(top=4.dp))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -470,12 +579,17 @@ fun ReportItemScreen(navController: NavController) {
             // SECTION 3: LOCATION
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Location", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(CityTheme.Gold))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Location", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
@@ -493,16 +607,59 @@ fun ReportItemScreen(navController: NavController) {
                                             if (loc != null) {
                                                 latitude = loc.latitude
                                                 longitude = loc.longitude
-                                                location = "${loc.latitude}, ${loc.longitude}"
+                                                coroutineScope.launch {
+                                                    location = getReadableAddress(context, loc.latitude, loc.longitude)
+                                                    cameraPositionState.animate(
+                                                        CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f)
+                                                    )
+                                                }
                                             }
                                         }
                                 } else {
                                     locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                                 }
                             }) {
-                                if (isFetchingLocation) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Icon(Icons.Default.LocationOn, null)
+                                if (isFetchingLocation) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Icon(Icons.Default.MyLocation, null)
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Google Map Picker
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(250.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .shadow(2.dp)
+                        ) {
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState,
+                                onMapClick = { latLng ->
+                                    latitude = latLng.latitude
+                                    longitude = latLng.longitude
+                                    coroutineScope.launch {
+                                        location = getReadableAddress(context, latLng.latitude, latLng.longitude)
+                                    }
+                                }
+                            ) {
+                                if (latitude != null && longitude != null) {
+                                    Marker(
+                                        state = MarkerState(position = LatLng(latitude!!, longitude!!)),
+                                        title = "Found Location",
+                                        draggable = true
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Text(
+                            "Tap map to pin exact location",
+                            fontSize = 11.sp,
+                            color = CityTheme.Brown.copy(0.5f),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                 }
             }
@@ -510,42 +667,38 @@ fun ReportItemScreen(navController: NavController) {
             // SUBMIT BUTTON
             item {
                 if (isSubmitting || isCheckingMatches) {
-                    CircularProgressIndicator()
-                    Text(if (isCheckingMatches) "Checking for owners..." else "Submitting...")
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(color = CityTheme.Green)
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (isCheckingMatches) "Checking for owners…" else "Submitting…", color = CityTheme.Brown.copy(alpha = 0.6f))
+                    }
                 } else {
                     Button(
                         onClick = {
                             if (itemName.isBlank() || location.isBlank()) {
                                 Toast.makeText(context, "Please fill required fields", Toast.LENGTH_SHORT).show()
                             } else {
-                                coroutineScope.launch {
-                                    isCheckingMatches = true
-                                    db.collection("lost_items").get().addOnSuccessListener { result ->
-                                        // FIX: Include document ID in each LostItem
-                                        val allLostItems = result.documents.mapNotNull { doc ->
-                                            doc.toObject(LostItem::class.java)?.copy(id = doc.id)
-                                        }
-                                        coroutineScope.launch {
-                                            val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, allLostItems) }
-                                            isCheckingMatches = false
-                                            if (matches.isNotEmpty()) {
-                                                potentialOwners = matches
-                                                showOwnerDialog = true
-                                            } else {
-                                                finalizeReportUpload()
+                                    coroutineScope.launch {
+                                        isCheckingMatches = true
+                                        db.collection("lost_items").get().addOnSuccessListener { result ->
+                                            val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
+                                                doc.toObject(LostItem::class.java)?.copy(id = doc.id)
                                             }
-                                        }
-                                    }.addOnFailureListener {
-                                        isCheckingMatches = false
-                                        finalizeReportUpload()
+                                            coroutineScope.launch {
+                                                val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, allLostItems) }
+                                                isCheckingMatches = false
+                                                if (matches.isNotEmpty()) { potentialOwners = matches; showOwnerDialog = true }
+                                                else { finalizeReportUpload() }
+                                            }
+                                        }.addOnFailureListener { isCheckingMatches = false; finalizeReportUpload() }
                                     }
-                                }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = MaterialTheme.shapes.medium
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
                     ) {
-                        Text("SUBMIT REPORT", style = MaterialTheme.typography.titleMedium)
+                        Text("SUBMIT REPORT", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
