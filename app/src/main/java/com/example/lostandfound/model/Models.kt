@@ -17,7 +17,7 @@ data class FoundItem(
     val dateFoundText: String = "",
     val imageUrl: String = "",
     val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
-    val status: String = "Found",
+    val status: String = ItemStatus.FOUND,
     val createdAt: Date? = null
 )
 
@@ -34,7 +34,7 @@ data class LostItem(
     val dateLost: Date = Date(),
     val imageUrl: String = "",
     val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
-    val status: String = "Lost",
+    val status: String = ItemStatus.LOST,
     val claimedFoundItemId: String = "",
     val createdAt: Date? = null
 )

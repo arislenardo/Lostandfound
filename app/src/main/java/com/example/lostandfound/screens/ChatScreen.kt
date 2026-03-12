@@ -201,6 +201,7 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                                                         senderId = currentUserId,
                                                         senderName = auth.currentUser?.displayName ?: auth.currentUser?.email ?: "User",
                                                         receiverId = receiverId,
+                                                        receiverName = receiverName,
                                                         text = newMessageText.trim(),
                                                         imageUrl = url,
                                                         timestamp = Date()

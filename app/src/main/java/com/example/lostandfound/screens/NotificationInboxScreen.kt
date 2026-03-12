@@ -24,6 +24,8 @@ import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.Claim
 import com.example.lostandfound.model.ClaimNotification
 import com.example.lostandfound.model.MatchNotification
+import com.example.lostandfound.model.ClaimStatus
+import com.example.lostandfound.model.MatchNotificationStatus
 import com.example.lostandfound.model.Message
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
@@ -116,7 +118,7 @@ fun NotificationInboxScreen(navController: NavController) {
                     title = "New Match Found!",
                     preview = "Potential match for: ${match.lostItemName}",
                     timestamp = match.createdAt,
-                    isUnread = match.status == "UNREAD",
+                    isUnread = match.status == MatchNotificationStatus.UNREAD,
                     actionData = match.foundItemId,
                     actionData2 = match.lostItemId
                 )
@@ -126,7 +128,7 @@ fun NotificationInboxScreen(navController: NavController) {
         // 3. Process Claims (Admin Only)
         if (isAdmin) {
             rawClaims.forEach { claim ->
-                val isDispute = claim.status == "DISPUTED"
+                val isDispute = claim.status == ClaimStatus.DISPUTED
                 combined.add(
                     UnifiedNotification(
                         id = claim.id,
@@ -181,7 +183,7 @@ fun NotificationInboxScreen(navController: NavController) {
 
         val matchListener = db.collection("match_notifications")
             .whereEqualTo("lostItemOwnerId", currentUserId)
-            .whereIn("status", listOf("UNREAD", "READ"))
+            .whereIn("status", listOf(MatchNotificationStatus.UNREAD, MatchNotificationStatus.READ))
             .addSnapshotListener { snap, _ ->
                 rawMatches.clear()
                 snap?.documents?.forEach { doc ->
@@ -226,7 +228,7 @@ fun NotificationInboxScreen(navController: NavController) {
         }
 
         val claimListener = db.collection("claims")
-            .whereIn("status", listOf("PENDING", "DISPUTED"))
+            .whereIn("status", listOf(ClaimStatus.PENDING, ClaimStatus.DISPUTED))
             .addSnapshotListener { snap, _ ->
                 rawClaims.clear()
                 snap?.documents?.forEach { doc ->
@@ -300,7 +302,7 @@ fun CityNotificationItem(notification: UnifiedNotification, navController: NavCo
         NotificationType.MESSAGE -> Pair("✉️", CityTheme.Green)
         NotificationType.MATCH -> Pair("🔍", CityTheme.Gold)
         NotificationType.CLAIM_PENDING -> Pair("⚠️", CityTheme.Error)
-        NotificationType.CLAIM_UPDATE -> if (notification.title.contains("APPROVED")) Pair("✅", CityTheme.Green) else Pair("❌", CityTheme.Error)
+                    NotificationType.CLAIM_UPDATE -> if (notification.title.contains(ClaimStatus.APPROVED)) Pair("✅", CityTheme.Green) else Pair("❌", CityTheme.Error)
     }
 
     Card(
@@ -310,7 +312,7 @@ fun CityNotificationItem(notification: UnifiedNotification, navController: NavCo
                 when(notification.type) {
                     NotificationType.MESSAGE -> navController.navigate("chat/${notification.actionData}/${notification.actionData2}")
                     NotificationType.MATCH -> {
-                        FirebaseFirestore.getInstance().collection("match_notifications").document(notification.id).update("status", "READ")
+                        FirebaseFirestore.getInstance().collection("match_notifications").document(notification.id).update("status", MatchNotificationStatus.READ)
                         navController.navigate("found_item_detail/${notification.actionData}?lostItemId=${notification.actionData2}")
                     }
                     NotificationType.CLAIM_PENDING -> navController.navigate("admin_claims")

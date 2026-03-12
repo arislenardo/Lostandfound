@@ -10,6 +10,6 @@ data class MatchNotification(
     val lostItemName: String = "",      // For display without extra fetch
     val foundItemName: String = "",     // For display without extra fetch
     val matchScore: Double = 0.0,
-    val status: String = "UNREAD",      // UNREAD, READ, DISMISSED
+    val status: String = MatchNotificationStatus.UNREAD,
     val createdAt: Date = Date()
 )

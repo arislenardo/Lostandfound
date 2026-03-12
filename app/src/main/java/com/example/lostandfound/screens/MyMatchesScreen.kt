@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.MatchNotification
+import com.example.lostandfound.model.MatchNotificationStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -50,7 +52,7 @@ fun MyMatchesScreen(navController: NavController) {
                 if (result != null) {
                     notifications = result.documents.mapNotNull { doc ->
                         doc.toObject(MatchNotification::class.java)?.copy(id = doc.id)
-                    }.filter { it.status != "DISMISSED" }.sortedByDescending { it.createdAt }
+                    }.filter { it.status != MatchNotificationStatus.DISMISSED }.sortedByDescending { it.createdAt }
                     isLoading = false
                 }
             }
@@ -107,7 +109,7 @@ fun MyMatchesScreen(navController: NavController) {
                     CityMatchNotificationCard(
                         notification = notification,
                         onViewDetails = {
-                            db.collection("match_notifications").document(notification.id).update("status", "READ")
+                            db.collection("match_notifications").document(notification.id).update("status", MatchNotificationStatus.READ)
                             navController.navigate("found_item_detail/${notification.foundItemId}?lostItemId=${notification.lostItemId}")
                         },
                         onDismiss = {
@@ -128,7 +130,7 @@ fun MyMatchesScreen(navController: NavController) {
                     Button(
                         onClick = {
                             db.collection("match_notifications").document(selectedNotification!!.id)
-                                .update("status", "DISMISSED")
+                                .update("status", MatchNotificationStatus.DISMISSED)
                                 .addOnSuccessListener {
                                     notifications = notifications.filter { it.id != selectedNotification!!.id }
                                 }
@@ -152,7 +154,7 @@ fun CityMatchNotificationCard(
     onViewDetails: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val isUnread = notification.status == "UNREAD"
+    val isUnread = notification.status == MatchNotificationStatus.UNREAD
     val matchPct = (notification.matchScore * 100).toInt()
     val matchColor = when {
         matchPct >= 70 -> CityTheme.Green
@@ -189,15 +191,12 @@ fun CityMatchNotificationCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     if (isUnread) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(CityTheme.Gold)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("NEW MATCH", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CityTheme.White)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.NewReleases, contentDescription = "New Match", tint = CityTheme.Gold, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("NEW MATCH", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CityTheme.Gold)
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
                     }
                     Text("Found: ${notification.foundItemName}", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.Brown)
                 }

@@ -30,6 +30,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.LostItem
+import com.example.lostandfound.model.ClaimStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -223,11 +224,11 @@ fun MyItemsScreen(navController: NavController) {
                 confirmButton = {
                     Button(
                         onClick = {
-                            db.collection("lost_items").document(itemToMarkFound!!.id).update("status", "FOUND")
+                            db.collection("lost_items").document(itemToMarkFound!!.id).update("status", ClaimStatus.FOUND)
                                 .addOnSuccessListener {
                                     Toast.makeText(context, "Marked as Found!", Toast.LENGTH_SHORT).show()
                                     // Update local state to reflect change without removing from list
-                                    allItems = allItems.map { if (it.id == itemToMarkFound!!.id) it.copy(status = "FOUND") else it }
+                                    allItems = allItems.map { if (it.id == itemToMarkFound!!.id) it.copy(status = ClaimStatus.FOUND) else it }
                                 }
                             showFoundConfirm = false
                         },
@@ -294,7 +295,12 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                     Text("By: ${item.email}", fontSize = 10.sp, color = CityTheme.Brown.copy(0.4f))
                 }
 
-                if (item.status != "APPROVED" && item.status != "REJECTED" && item.status != "FOUND" && item.status != "CLAIM_PENDING" && item.status != "DISPUTED") {
+                if (item.status != ClaimStatus.APPROVED &&
+                    item.status != ClaimStatus.REJECTED &&
+                    item.status != ClaimStatus.FOUND &&
+                    item.status != ClaimStatus.CLAIM_PENDING &&
+                    item.status != ClaimStatus.DISPUTED
+                ) {
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = onFound,
@@ -305,12 +311,12 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                 } else {
                     Spacer(Modifier.height(8.dp))
                     val (statusLabel, statusColor) = when (item.status) {
-                        "APPROVED"      -> "APPROVED (Pick up at Station)" to CityTheme.Green
-                        "REJECTED"      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
-                        "DISPUTED"      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
-                        "FOUND"         -> "FOUND & RESOLVED" to CityTheme.Green
-                        "CLAIM_PENDING" -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
-                        else            -> "STATUS: ${item.status}" to CityTheme.Gold
+                        ClaimStatus.APPROVED      -> "APPROVED (Pick up at Station)" to CityTheme.Green
+                        ClaimStatus.REJECTED      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
+                        ClaimStatus.DISPUTED      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
+                        ClaimStatus.FOUND         -> "FOUND & RESOLVED" to CityTheme.Green
+                        ClaimStatus.CLAIM_PENDING -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
+                        else                      -> "STATUS: ${item.status}" to CityTheme.Gold
                     }
 
                     Surface(

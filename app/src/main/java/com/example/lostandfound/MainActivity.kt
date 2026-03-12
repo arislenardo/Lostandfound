@@ -231,5 +231,8 @@ fun LostAndFoundApp() {
         composable("history") {
             HistoryScreen(navController = navController)
         }
+        composable("admin_maintenance") {
+            AdminMaintenanceScreen(navController = navController)
+        }
     }
 }

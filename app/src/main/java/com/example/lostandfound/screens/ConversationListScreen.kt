@@ -115,7 +115,8 @@ fun ConversationListScreen(navController: NavController) {
 @Composable
 fun CityConversationItem(message: Message, currentUserId: String, navController: NavController) {
     val otherUserId = if (message.senderId == currentUserId) message.receiverId else message.senderId
-    val displayName = if (message.senderId != currentUserId) message.senderName else "User"
+    val displayName = if (message.senderId != currentUserId) message.senderName else message.receiverName
+    val isUnread = message.receiverId == currentUserId && !message.isRead
     val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
     val initials = displayName.take(1).uppercase()
 
@@ -133,14 +134,26 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar circle
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(CityTheme.Green),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(initials, color = CityTheme.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(CityTheme.Green),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(initials, color = CityTheme.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+                if (isUnread) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(CityTheme.Gold)
+                            .border(2.dp, CityTheme.White, CircleShape)
+                            .align(Alignment.TopEnd)
+                    )
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -155,7 +168,8 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
                     text = "${if (message.senderId == currentUserId) "You: " else ""}${message.text}",
                     maxLines = 1,
                     fontSize = 12.sp,
-                    color = CityTheme.Brown.copy(alpha = 0.5f)
+                    color = if (isUnread) CityTheme.Brown else CityTheme.Brown.copy(alpha = 0.5f),
+                    fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Normal
                 )
             }
             Text(

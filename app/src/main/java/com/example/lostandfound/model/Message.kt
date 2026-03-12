@@ -7,6 +7,7 @@ data class Message(
     val senderId: String = "",
     val senderName: String = "", // Added for easier display
     val receiverId: String = "",
+    val receiverName: String = "", // Tracks the receiver's name for conversation lists
     val text: String = "",
     val timestamp: Date = Date(),
     val itemId: String = "", // Optional: Link chat to a specific item context

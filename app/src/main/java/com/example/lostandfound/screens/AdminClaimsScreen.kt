@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.lostandfound.model.AdminAction
 import com.example.lostandfound.model.Claim
+import com.example.lostandfound.model.ClaimStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -45,7 +46,7 @@ fun AdminClaimsScreen(navController: NavController) {
 
     LaunchedEffect(Unit) {
         db.collection("claims")
-            .whereIn("status", listOf("PENDING", "DISPUTED"))
+            .whereIn("status", listOf(ClaimStatus.PENDING, ClaimStatus.DISPUTED))
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
                     claims = snapshot.documents.mapNotNull { it.toObject(Claim::class.java)?.copy(id = it.id) }
@@ -72,7 +73,7 @@ fun AdminClaimsScreen(navController: NavController) {
                     db.collection("lost_items").document(claim.lostItemId).update("status", newStatus)
                 }
                 // ALSO: If approved, mark the found item as CLAIMED so it disappears from public search
-                if (newStatus == "APPROVED") {
+                if (newStatus == ClaimStatus.APPROVED) {
                     db.collection("found_items").document(claim.itemId).update("status", "CLAIMED")
                 }
                 // 1. Create a notification for the user
@@ -89,7 +90,7 @@ fun AdminClaimsScreen(navController: NavController) {
                 }
 
                 // 2. Log the action
-                val actionType = if (newStatus == "APPROVED") "APPROVED_CLAIM" else "REJECTED_CLAIM"
+                val actionType = if (newStatus == ClaimStatus.APPROVED) "APPROVED_CLAIM" else "REJECTED_CLAIM"
                 val action = AdminAction(
                     adminId = adminId,
                     adminName = adminName,
@@ -153,12 +154,12 @@ fun AdminClaimsScreen(navController: NavController) {
                         claim = claim,
                         onApprove = { 
                             selectedClaim = claim
-                            pendingStatus = "APPROVED"
+                            pendingStatus = ClaimStatus.APPROVED
                             showConfirmDialog = true
                         },
                         onReject = { 
                             selectedClaim = claim
-                            pendingStatus = "REJECTED"
+                            pendingStatus = ClaimStatus.REJECTED
                             showConfirmDialog = true
                         },
                         onMessage = {
@@ -173,7 +174,7 @@ fun AdminClaimsScreen(navController: NavController) {
         if (showConfirmDialog && selectedClaim != null) {
             AlertDialog(
                 onDismissRequest = { showConfirmDialog = false },
-                title = { Text(if (pendingStatus == "APPROVED") "Approve Claim?" else "Reject Claim?", fontWeight = FontWeight.Bold) },
+                title = { Text(if (pendingStatus == ClaimStatus.APPROVED) "Approve Claim?" else "Reject Claim?", fontWeight = FontWeight.Bold) },
                 text = { Text("Are you sure you want to ${pendingStatus.lowercase()} this claim for '${selectedClaim!!.itemName}'?") },
                 confirmButton = {
                     Button(
@@ -217,7 +218,7 @@ fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Uni
                     Text("Claimant", fontSize = 10.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
                     Text(claim.userEmail, fontWeight = FontWeight.Medium, color = CityTheme.Brown, fontSize = 13.sp)
                 }
-                if (claim.status == "DISPUTED") {
+                if (claim.status == ClaimStatus.DISPUTED) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))

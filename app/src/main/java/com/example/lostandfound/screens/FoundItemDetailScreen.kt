@@ -27,6 +27,8 @@ import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.AdminAction
 import com.example.lostandfound.model.Claim
 import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.model.ClaimStatus
+import com.example.lostandfound.model.ItemStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -331,7 +333,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                             confirmButton = {
                                 Button(
                                     onClick = {
-                                        db.collection("found_items").document(item!!.id).update("status", "RETURNED")
+                                        db.collection("found_items").document(item!!.id).update("status", ItemStatus.RETURNED)
                                             .addOnSuccessListener {
                                                 val action = com.example.lostandfound.model.AdminAction(
                                                     adminId = currentUserId ?: "",
@@ -378,9 +380,9 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                         } else {
                             val claimStatus = userClaim!!.status
                             val statusColor = when (claimStatus) {
-                                "APPROVED" -> CityTheme.Green
-                                "REJECTED" -> CityTheme.Error
-                                else       -> CityTheme.Gold
+                                ClaimStatus.APPROVED -> CityTheme.Green
+                                ClaimStatus.REJECTED -> CityTheme.Error
+                                else                 -> CityTheme.Gold
                             }
                             CityDetailCard("MY CLAIM", tint = statusColor) {
                                 Box(
@@ -390,13 +392,13 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 when (claimStatus) {
-                                    "APPROVED" -> {
+                                    ClaimStatus.APPROVED -> {
                                         Text("Your claim has been approved! ✅\n\nPlease pick up your item at the Calasiao Police Station. Present this screen and a valid ID to the officer on duty.", fontSize = 14.sp, color = CityTheme.Green, fontWeight = FontWeight.Bold)
                                         Spacer(Modifier.height(12.dp))
                                         DetailRowLabel("Finder/Station Email", item!!.email)
                                     }
-                                    "PENDING"  -> Text("Your proof is currently being reviewed by an officer.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
-                                    "REJECTED" -> {
+                                    ClaimStatus.PENDING  -> Text("Your proof is currently being reviewed by an officer.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
+                                    ClaimStatus.REJECTED -> {
                                         Text("ACTION REQUIRED", fontWeight = FontWeight.ExtraBold, color = CityTheme.Error, fontSize = 12.sp)
                                         Spacer(Modifier.height(4.dp))
                                         Text("Your claim was rejected. ❌\n\nReason: The proof provided was insufficient. You can dispute this decision if you have more evidence or want to talk to the reviewing officer.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
@@ -405,12 +407,12 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                         // Combined Dispute & Message button
                                         Button(
                                             onClick = {
-                                                db.collection("claims").document(userClaim!!.id).update("status", "DISPUTED")
+                                                db.collection("claims").document(userClaim!!.id).update("status", ClaimStatus.DISPUTED)
                                                     .addOnSuccessListener {
                                                         if (userClaim!!.lostItemId.isNotBlank()) {
-                                                            db.collection("lost_items").document(userClaim!!.lostItemId).update("status", "DISPUTED")
+                                                            db.collection("lost_items").document(userClaim!!.lostItemId).update("status", ClaimStatus.DISPUTED)
                                                         }
-                                                        userClaim = userClaim?.copy(status = "DISPUTED")
+                                                        userClaim = userClaim?.copy(status = ClaimStatus.DISPUTED)
                                                         val adminName = if(userClaim!!.reviewerEmail.isNotBlank()) userClaim!!.reviewerEmail.substringBefore("@") else "Admin"
                                                         navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName")
                                                     }
@@ -429,7 +431,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                             Text("Withdraw Claim & Close", color = CityTheme.Error, fontSize = 12.sp)
                                         }
                                     }
-                                    "DISPUTED" -> {
+                                    ClaimStatus.DISPUTED -> {
                                         Text("You have disputed this rejection. An officer will re-review your proof.", fontSize = 13.sp, color = CityTheme.Gold)
                                         Spacer(Modifier.height(8.dp))
                                         OutlinedButton(

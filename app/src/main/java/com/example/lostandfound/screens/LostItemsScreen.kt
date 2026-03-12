@@ -29,6 +29,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.FoundItem
+import com.example.lostandfound.model.ItemStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -50,7 +51,7 @@ fun LostItemsScreen(navController: NavController) {
 
     LaunchedEffect(Unit) {
         db.collection("found_items")
-            .whereEqualTo("status", "Found")
+            .whereEqualTo("status", ItemStatus.FOUND)
             .limit(500)
             .get()
             .addOnSuccessListener { result ->

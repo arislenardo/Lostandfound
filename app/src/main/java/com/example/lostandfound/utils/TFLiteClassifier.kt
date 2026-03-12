@@ -71,6 +71,20 @@ class TFLiteClassifier(val context: Context) {
     }
 
     /**
+     * Release TFLite resources when no longer needed.
+     * Call this from the owning ViewModel's onCleared or similar lifecycle hook.
+     */
+    fun close() {
+        try {
+            interpreter?.close()
+        } catch (e: Exception) {
+            android.util.Log.e("TFLiteClassifier", "Error closing interpreter: ${e.message}", e)
+        } finally {
+            interpreter = null
+        }
+    }
+
+    /**
      * Legacy: kept for any callers that still use classify().
      * Simply returns the top category name based on the highest activation index.
      * Consider migrating all usages to extractFeatureVector().

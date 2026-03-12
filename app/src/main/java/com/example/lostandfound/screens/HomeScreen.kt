@@ -25,97 +25,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.example.lostandfound.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
-
     val currentUser = auth.currentUser
-    var isAdmin by remember { mutableStateOf(AuthManager.isCurrentUserAdmin()) }
-    var userName by remember { mutableStateOf(currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "User") }
+    val viewModel: HomeViewModel = viewModel()
+    val state by viewModel.uiState
 
-    LaunchedEffect(Unit) {
-        isAdmin = AuthManager.refreshAdminStatus()
-        
-        // Fetch name from users collection
-        if (currentUser != null) {
-            db.collection("users").document(currentUser.uid).get()
-                .addOnSuccessListener { doc ->
-                    if (doc.exists()) {
-                        val name = doc.getString("name")
-                        if (!name.isNullOrBlank()) {
-                            userName = name
-                        }
-                    }
-                }
-        }
-    }
-
-    val firstName = userName.split(" ").firstOrNull() ?: userName
-
-    // ── Live notification count (unread messages + new matches) ──────────────
-    val userId = currentUser?.uid
-    var notifCount by remember { mutableStateOf(0) }
-    var unreadMsgs by remember { mutableStateOf(0) }
-    var unreadMatches by remember { mutableStateOf(0) }
-    var pendingClaims by remember { mutableStateOf(0) }
-    var unreadClaimUpdates by remember { mutableStateOf(0) }
-
-    LaunchedEffect(unreadMsgs, unreadMatches, pendingClaims, unreadClaimUpdates) {
-        notifCount = unreadMsgs + unreadMatches + pendingClaims + unreadClaimUpdates
-    }
-
-    DisposableEffect(userId) {
-        if (userId == null) return@DisposableEffect onDispose { }
-        val msgListener = db.collection("messages")
-            .whereEqualTo("receiverId", userId)
-            .whereEqualTo("isRead", false)
-            .addSnapshotListener { snap, _ ->
-                unreadMsgs = snap?.size() ?: 0
-            }
-        onDispose { msgListener.remove() }
-    }
-
-    DisposableEffect(userId) {
-        if (userId == null) return@DisposableEffect onDispose { }
-        val matchListener = db.collection("match_notifications")
-            .whereEqualTo("lostItemOwnerId", userId)
-            .whereEqualTo("status", "UNREAD")
-            .addSnapshotListener { snap, _ ->
-                unreadMatches = snap?.size() ?: 0
-            }
-        onDispose { matchListener.remove() }
-    }
-
-    DisposableEffect(isAdmin) {
-        if (!isAdmin) {
-            pendingClaims = 0
-            return@DisposableEffect onDispose { }
-        }
-        val claimListener = db.collection("claims")
-            .whereIn("status", listOf("PENDING", "DISPUTED"))
-            .addSnapshotListener { snap, _ ->
-                pendingClaims = snap?.size() ?: 0
-            }
-        onDispose { claimListener.remove() }
-    }
-
-    DisposableEffect(userId) {
-        if (userId == null) return@DisposableEffect onDispose { }
-        val claimNotifListener = db.collection("claim_notifications")
-            .whereEqualTo("userId", userId)
-            .whereEqualTo("isRead", false)
-            .addSnapshotListener { snap, _ ->
-                unreadClaimUpdates = snap?.size() ?: 0
-            }
-        onDispose { claimNotifListener.remove() }
-    }
+    val firstName = state.firstName
+    val isAdmin = state.isAdmin
+    val notifCount = state.notifCount
 
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -398,6 +325,18 @@ fun HomeScreen(navController: NavController) {
                         modifier = Modifier.weight(1f),
                         onClick = { navController.navigate("admin_claims") }
                     )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeDashboardCard(
+                        title = "Admin Maintenance",
+                        subtitle = "Danger Zone / Reset",
+                        icon = Icons.Default.Build,
+                        iconBackground = CityTheme.Error,
+                        modifier = Modifier.weight(1f),
+                        onClick = { navController.navigate("admin_maintenance") }
+                    )
+                    Spacer(modifier = Modifier.weight(1f)) // Half-width spacer
                 }
                 Spacer(Modifier.height(12.dp))
                 // Browse by Category — full-width card

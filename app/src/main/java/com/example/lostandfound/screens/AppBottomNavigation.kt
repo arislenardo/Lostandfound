@@ -11,8 +11,17 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Text
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -24,6 +33,24 @@ fun AppBottomNavigation(
     currentRoute: String,
     isAdmin: Boolean = false
 ) {
+    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    val currentUserId = auth.currentUser?.uid ?: ""
+    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+    
+    var unreadMessageCount by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isBlank()) return@LaunchedEffect
+        val listener = db.collection("messages")
+            .whereEqualTo("receiverId", currentUserId)
+            .whereEqualTo("isRead", false)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null) return@addSnapshotListener
+                unreadMessageCount = snapshot.documents.size
+            }
+        // No strict need to cleanup if this sits at the root, but good practice if it recomposes
+    }
+
     NavigationBar(
         containerColor = CityTheme.White,
         tonalElevation = 8.dp
@@ -73,7 +100,24 @@ fun AppBottomNavigation(
             )
         }
         NavigationBarItem(
-            icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+            icon = { 
+                BadgedBox(
+                    badge = {
+                        if (unreadMessageCount > 0) {
+                            Badge(containerColor = CityTheme.Gold) {
+                                Text(
+                                    if (unreadMessageCount > 9) "9+" else "$unreadMessageCount",
+                                    fontSize = 10.sp,
+                                    color = CityTheme.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = "Profile")
+                }
+            },
             label = { Text("Profile", fontSize = 10.sp) },
             selected = currentRoute == "profile",
             onClick = {

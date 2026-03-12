@@ -49,6 +49,9 @@ import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
 import com.example.lostandfound.model.MatchNotification
+import com.example.lostandfound.model.ItemStatus
+import com.example.lostandfound.model.MatchNotificationStatus
+import com.example.lostandfound.model.ClaimStatus
 import com.example.lostandfound.utils.uploadImageToStorage
 import com.example.lostandfound.utils.getReadableAddress
 import com.example.lostandfound.utils.findLostMatches
@@ -127,6 +130,11 @@ fun ReportItemScreen(navController: NavController) {
     var imageVector by remember { mutableStateOf<List<Double>>(emptyList()) }
 
     val classifier = remember { TFLiteClassifier(context) }
+    DisposableEffect(Unit) {
+        onDispose {
+            classifier.close()
+        }
+    }
 
     // --- LAUNCHERS (Keep logic same) ---
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -229,7 +237,7 @@ fun ReportItemScreen(navController: NavController) {
             dateFoundText = dateFoundText,
             imageUrl = imageUrl ?: "",
             imageVector = imageVector,
-            status = "Found",
+            status = ItemStatus.FOUND,
             createdAt = Date()
         )
 
@@ -260,7 +268,7 @@ fun ReportItemScreen(navController: NavController) {
                             lostItemName = lostItem.name,
                             foundItemName = itemName,
                             matchScore = score,
-                            status = "UNREAD",
+                            status = MatchNotificationStatus.UNREAD,
                             createdAt = java.util.Date()
                         )
                         db.collection("match_notifications").add(notification)
@@ -306,15 +314,16 @@ fun ReportItemScreen(navController: NavController) {
                         items(potentialOwners) { (item, score) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                colors = CardDefaults.cardColors(containerColor = CityTheme.Cream),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(item.name, style = MaterialTheme.typography.titleMedium)
                                         Text(
                                             text = "${(score * 100).toInt()}% Match",
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = CityTheme.Gold,
+                                            fontWeight = FontWeight.ExtraBold,
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     }
@@ -661,11 +670,25 @@ fun ReportItemScreen(navController: NavController) {
 
             // SUBMIT BUTTON
             item {
-                if (isSubmitting || isCheckingMatches) {
+                if (isCheckingMatches) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(CityTheme.Brown)
+                            .padding(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = CityTheme.Gold)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Smart AI Scanning...", color = CityTheme.White, fontWeight = FontWeight.Bold)
+                        Text("Looking for visual and keyword matches", fontSize = 12.sp, color = CityTheme.White.copy(alpha = 0.7f))
+                    }
+                } else if (isSubmitting) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         CircularProgressIndicator(color = CityTheme.Green)
                         Spacer(Modifier.height(8.dp))
-                        Text(if (isCheckingMatches) "Checking for owners…" else "Submitting…", color = CityTheme.Brown.copy(alpha = 0.6f))
+                        Text("Submitting…", color = CityTheme.Brown.copy(alpha = 0.6f))
                     }
                 } else {
                     Button(
@@ -676,10 +699,10 @@ fun ReportItemScreen(navController: NavController) {
                                     coroutineScope.launch {
                                         isCheckingMatches = true
                                         db.collection("lost_items").get().addOnSuccessListener { result ->
-                                            val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
-                                                val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
-                                                if (obj != null && obj.status != "FOUND" && obj.status != "APPROVED") obj else null
-                                            }
+                                                val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
+                                                    val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
+                                                    if (obj != null && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED) obj else null
+                                                }
                                             coroutineScope.launch {
                                                 val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
                                                 isCheckingMatches = false

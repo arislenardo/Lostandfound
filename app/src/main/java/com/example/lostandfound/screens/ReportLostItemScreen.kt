@@ -47,6 +47,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
+import com.example.lostandfound.model.MatchNotificationStatus
+import com.example.lostandfound.model.ClaimStatus
 import com.example.lostandfound.R
 import com.example.lostandfound.utils.findPotentialMatches
 import com.example.lostandfound.utils.uploadImageToStorage
@@ -124,6 +126,11 @@ fun ReportLostItemScreen(navController: NavController) {
     var imageVector by remember { mutableStateOf<List<Double>>(emptyList()) }
 
     val classifier = remember { TFLiteClassifier(context) }
+    DisposableEffect(Unit) {
+        onDispose {
+            classifier.close()
+        }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -234,7 +241,7 @@ fun ReportLostItemScreen(navController: NavController) {
             dateLost = dateObj ?: Date(),
             imageUrl = imageUrl ?: "",
             imageVector = imageVector,
-            status = "PENDING",
+            status = ClaimStatus.PENDING,
             createdAt = Date()
         )
 
@@ -254,7 +261,7 @@ fun ReportLostItemScreen(navController: NavController) {
                         lostItemName = itemName,
                         foundItemName = foundItem.name,
                         matchScore = score,
-                        status = "UNREAD",
+                        status = MatchNotificationStatus.UNREAD,
                         createdAt = java.util.Date()
                     )
                     db.collection("match_notifications").add(matchNotif).addOnSuccessListener { ref ->
@@ -301,7 +308,7 @@ fun ReportLostItemScreen(navController: NavController) {
             db.collection("found_items").get().addOnSuccessListener { result ->
                 val allFoundItems = result.documents.mapNotNull { doc ->
                     val obj = doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
-                    if (obj != null && obj.status == "Found") obj else null
+                    if (obj != null && obj.status == com.example.lostandfound.model.ItemStatus.FOUND) obj else null
                 }
                 scope.launch {
                     val matches = withContext(Dispatchers.Default) {
@@ -340,15 +347,16 @@ fun ReportLostItemScreen(navController: NavController) {
                         items(potentialMatches) { (item, score) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                colors = CardDefaults.cardColors(containerColor = CityTheme.Cream),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(item.name, style = MaterialTheme.typography.titleMedium)
                                         Text(
                                             text = stringResource(R.string.match_percentage, (score * 100).toInt()),
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = CityTheme.Gold,
+                                            fontWeight = FontWeight.ExtraBold,
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     }
@@ -648,11 +656,25 @@ fun ReportLostItemScreen(navController: NavController) {
 
             // SUBMIT
             item {
-                if (isSubmitting || isCheckingMatches) {
+                if (isCheckingMatches) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(CityTheme.Brown)
+                            .padding(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = CityTheme.Gold)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Smart AI Scanning...", color = CityTheme.White, fontWeight = FontWeight.Bold)
+                        Text("Looking for visual and keyword matches", fontSize = 12.sp, color = CityTheme.White.copy(alpha = 0.7f))
+                    }
+                } else if (isSubmitting) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         CircularProgressIndicator(color = CityTheme.Green)
                         Spacer(Modifier.height(8.dp))
-                        Text(if (isCheckingMatches) stringResource(R.string.checking_matches) else stringResource(R.string.submitting), color = CityTheme.Brown.copy(alpha = 0.6f))
+                        Text(stringResource(R.string.submitting), color = CityTheme.Brown.copy(alpha = 0.6f))
                     }
                 } else {
                     Button(

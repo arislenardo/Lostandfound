@@ -10,7 +10,7 @@ data class Claim(
     val userName: String = "",
     val userEmail: String = "",
     val proofDescription: String = "",
-    val status: String = "PENDING", // PENDING, APPROVED, REJECTED, DISPUTED
+    val status: String = ClaimStatus.PENDING,
     val reviewedBy: String = "",     // Admin userId who reviewed
     val reviewerEmail: String = "",  // Admin email for display
     val itemName: String = "",       // Added for notifications and admin view
