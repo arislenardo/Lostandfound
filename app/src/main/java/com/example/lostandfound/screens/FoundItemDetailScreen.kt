@@ -51,7 +51,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FoundItemDetailScreen(navController: NavController, itemId: String) {
+fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItemId: String? = null) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
@@ -232,13 +232,22 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
             ) {
                 // Image banner
                 if (item!!.imageUrl.isNotBlank() && !isEditing) {
-                    Card(Modifier.fillMaxWidth().height(200.dp).shadow(4.dp, RoundedCornerShape(16.dp)), RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                    Card(
+                        Modifier.fillMaxWidth().height(200.dp),
+                        RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
                         AsyncImage(model = item!!.imageUrl, contentDescription = "Item Image", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                 }
 
                 if (isEditing) {
-                    Card(Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(16.dp)), RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(CityTheme.White), elevation = CardDefaults.cardElevation(0.dp)) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(CityTheme.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = CityTheme.Green, unfocusedBorderColor = CityTheme.Brown.copy(0.25f), focusedLabelColor = CityTheme.Green, cursorColor = CityTheme.Green)
                             OutlinedTextField(editName, { editName = it }, Modifier.fillMaxWidth(), label = { Text("Item Name") }, shape = RoundedCornerShape(12.dp), colors = fc)
@@ -382,13 +391,15 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                 Spacer(Modifier.height(8.dp))
                                 when (claimStatus) {
                                     "APPROVED" -> {
-                                        Text("Your claim has been approved! Please pick up the item at the station.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
-                                        Spacer(Modifier.height(8.dp))
-                                        DetailRowLabel("Finder Email", item!!.email)
+                                        Text("Your claim has been approved! ✅\n\nPlease pick up your item at the Calasiao Police Station. Present this screen and a valid ID to the officer on duty.", fontSize = 14.sp, color = CityTheme.Green, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(12.dp))
+                                        DetailRowLabel("Finder/Station Email", item!!.email)
                                     }
                                     "PENDING"  -> Text("Your proof is currently being reviewed by an officer.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
                                     "REJECTED" -> {
-                                        Text("Your claim was rejected. If you believe this is a mistake, you can dispute the decision and message the reviewing officer to provide further proof.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
+                                        Text("ACTION REQUIRED", fontWeight = FontWeight.ExtraBold, color = CityTheme.Error, fontSize = 12.sp)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text("Your claim was rejected. ❌\n\nReason: The proof provided was insufficient. You can dispute this decision if you have more evidence or want to talk to the reviewing officer.", fontSize = 13.sp, color = CityTheme.Brown.copy(0.7f))
                                         Spacer(Modifier.height(16.dp))
                                         
                                         // Combined Dispute & Message button
@@ -396,47 +407,26 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                             onClick = {
                                                 db.collection("claims").document(userClaim!!.id).update("status", "DISPUTED")
                                                     .addOnSuccessListener {
+                                                        if (userClaim!!.lostItemId.isNotBlank()) {
+                                                            db.collection("lost_items").document(userClaim!!.lostItemId).update("status", "DISPUTED")
+                                                        }
                                                         userClaim = userClaim?.copy(status = "DISPUTED")
                                                         val adminName = if(userClaim!!.reviewerEmail.isNotBlank()) userClaim!!.reviewerEmail.substringBefore("@") else "Admin"
                                                         navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName")
                                                     }
                                             },
-                                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                                            modifier = Modifier.fillMaxWidth().height(52.dp),
                                             shape = RoundedCornerShape(12.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Gold)
                                         ) { 
-                                            Icon(Icons.Default.Gavel, null, modifier = Modifier.size(18.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("Dispute & Message Officer", fontWeight = FontWeight.Bold) 
+                                            Icon(Icons.Default.Gavel, null, modifier = Modifier.size(20.dp), tint = CityTheme.White)
+                                            Spacer(Modifier.width(10.dp))
+                                            Text("TAP TO DISPUTE & MESSAGE OFFICER", fontWeight = FontWeight.ExtraBold, color = CityTheme.White, fontSize = 12.sp) 
                                         }
 
                                         Spacer(Modifier.height(12.dp))
-                                        TextButton(
-                                            onClick = { showWithdrawConfirm = true },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) { Text("Withdraw Claim & Close", color = CityTheme.Error, fontSize = 12.sp) }
-
-                                        if (showWithdrawConfirm) {
-                                            AlertDialog(
-                                                onDismissRequest = { showWithdrawConfirm = false },
-                                                title = { Text("Withdraw Claim?", fontWeight = FontWeight.Bold) },
-                                                text = { Text("Are you sure you want to withdraw your claim for this item? You will need to submit a new one if you change your mind.") },
-                                                confirmButton = {
-                                                    Button(
-                                                        onClick = {
-                                                            db.collection("claims").document(userClaim!!.id).delete().addOnSuccessListener { 
-                                                                userClaim = null 
-                                                                showWithdrawConfirm = false
-                                                            }
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
-                                                    ) { Text("Withdraw") }
-                                                },
-                                                dismissButton = {
-                                                    TextButton(onClick = { showWithdrawConfirm = false }) { Text("Cancel", color = CityTheme.Brown) }
-                                                },
-                                                shape = RoundedCornerShape(16.dp)
-                                            )
+                                        TextButton(onClick = { showWithdrawConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Withdraw Claim & Close", color = CityTheme.Error, fontSize = 12.sp)
                                         }
                                     }
                                     "DISPUTED" -> {
@@ -453,6 +443,29 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                         ) { Text("Message Reviewing Admin") }
                                     }
                                 }
+                            }
+
+                            if (showWithdrawConfirm) {
+                                AlertDialog(
+                                    onDismissRequest = { showWithdrawConfirm = false },
+                                    title = { Text("Withdraw Claim?", fontWeight = FontWeight.Bold) },
+                                    text = { Text("Are you sure you want to withdraw your claim? You will need to submit a new one if you change your mind.") },
+                                    confirmButton = {
+                                        Button(
+                                            onClick = {
+                                                db.collection("claims").document(userClaim!!.id).delete().addOnSuccessListener { 
+                                                    userClaim = null 
+                                                    showWithdrawConfirm = false
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
+                                        ) { Text("Withdraw") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showWithdrawConfirm = false }) { Text("Cancel", color = CityTheme.Green) }
+                                    },
+                                    shape = RoundedCornerShape(16.dp)
+                                )
                             }
                         }
 
@@ -513,6 +526,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                                     
                                                     val newClaim = Claim(
                                                         itemId = item!!.id, 
+                                                        lostItemId = lostItemId ?: "",
                                                         itemName = item!!.name,
                                                         userId = currentUserId ?: "",
                                                         userName = auth.currentUser?.displayName ?: "User",
@@ -525,6 +539,17 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String) {
                                                     withContext(Dispatchers.Main) {
                                                         db.collection("claims").add(newClaim).addOnSuccessListener { ref ->
                                                             ref.update("id", ref.id)
+                                                            
+                                                            // ALSO: Update the associated lost item status & link if linked
+                                                            if (!lostItemId.isNullOrBlank()) {
+                                                                db.collection("lost_items").document(lostItemId).update(
+                                                                    mapOf(
+                                                                        "status" to "CLAIM_PENDING",
+                                                                        "claimedFoundItemId" to item!!.id
+                                                                    )
+                                                                )
+                                                            }
+                                                            
                                                             showClaimDialog = false; isSubmittingClaim = false
                                                             Toast.makeText(context, "Claim submitted for review!", Toast.LENGTH_LONG).show()
                                                         }.addOnFailureListener { isSubmittingClaim = false }

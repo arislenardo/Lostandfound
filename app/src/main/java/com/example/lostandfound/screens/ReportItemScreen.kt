@@ -122,7 +122,9 @@ fun ReportItemScreen(navController: NavController) {
 
     // Category Dropdown State
     var expandedCategory by remember { mutableStateOf(false) }
-    var isAutoClassified by remember { mutableStateOf(false) }
+
+    // Image embedding state
+    var imageVector by remember { mutableStateOf<List<Double>>(emptyList()) }
 
     val classifier = remember { TFLiteClassifier(context) }
 
@@ -141,12 +143,9 @@ fun ReportItemScreen(navController: NavController) {
                         MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
                     }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
 
-                    val results = classifier.classify(bitmap)
-                    if (results.isNotEmpty()) {
-                        val topResult = results[0]
-                        category = classifier.mapLabelToCategory(topResult)
-                        isAutoClassified = true
-                        Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                    coroutineScope.launch(Dispatchers.Default) {
+                        val vec = classifier.extractFeatureVector(bitmap)
+                        withContext(Dispatchers.Main) { imageVector = vec }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -168,12 +167,9 @@ fun ReportItemScreen(navController: NavController) {
                     MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
                 }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
 
-                val results = classifier.classify(bitmap)
-                if (results.isNotEmpty()) {
-                    val topResult = results[0]
-                    category = classifier.mapLabelToCategory(topResult)
-                    isAutoClassified = true
-                    Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                coroutineScope.launch(Dispatchers.Default) {
+                    val vec = classifier.extractFeatureVector(bitmap)
+                    withContext(Dispatchers.Main) { imageVector = vec }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -232,6 +228,7 @@ fun ReportItemScreen(navController: NavController) {
             dateFound = dateFound,
             dateFoundText = dateFoundText,
             imageUrl = imageUrl ?: "",
+            imageVector = imageVector,
             status = "Found",
             createdAt = Date()
         )
@@ -309,7 +306,8 @@ fun ReportItemScreen(navController: NavController) {
                         items(potentialOwners) { (item, score) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -449,10 +447,10 @@ fun ReportItemScreen(navController: NavController) {
             // SECTION 1: PHOTO
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -512,10 +510,10 @@ fun ReportItemScreen(navController: NavController) {
             // SECTION 2: DETAILS
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -547,12 +545,9 @@ fun ReportItemScreen(navController: NavController) {
                                 onDismissRequest = { expandedCategory = false }
                             ) {
                                 categories.forEach { opt ->
-                                    DropdownMenuItem(text = { Text(opt) }, onClick = { category = opt; expandedCategory = false; isAutoClassified = false })
+                                    DropdownMenuItem(text = { Text(opt) }, onClick = { category = opt; expandedCategory = false })
                                 }
                             }
-                        }
-                        if (isAutoClassified) {
-                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = CityTheme.Gold, modifier = Modifier.padding(top=4.dp))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -579,10 +574,10 @@ fun ReportItemScreen(navController: NavController) {
             // SECTION 3: LOCATION
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -682,10 +677,11 @@ fun ReportItemScreen(navController: NavController) {
                                         isCheckingMatches = true
                                         db.collection("lost_items").get().addOnSuccessListener { result ->
                                             val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
-                                                doc.toObject(LostItem::class.java)?.copy(id = doc.id)
+                                                val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
+                                                if (obj != null && obj.status != "FOUND" && obj.status != "APPROVED") obj else null
                                             }
                                             coroutineScope.launch {
-                                                val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, allLostItems) }
+                                                val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
                                                 isCheckingMatches = false
                                                 if (matches.isNotEmpty()) { potentialOwners = matches; showOwnerDialog = true }
                                                 else { finalizeReportUpload() }

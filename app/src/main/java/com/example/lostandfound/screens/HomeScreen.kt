@@ -213,11 +213,10 @@ fun HomeScreen(navController: NavController) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp)
-                    .shadow(6.dp, RoundedCornerShape(16.dp)),
+                    .padding(bottom = 24.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                elevation = CardDefaults.cardElevation(0.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -332,13 +331,15 @@ fun HomeScreen(navController: NavController) {
                 Card(
                     onClick = { navController.navigate("my_matches") },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(if (hasUnread) 6.dp else 2.dp, RoundedCornerShape(14.dp)),
+                        .fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (hasUnread) CityTheme.Gold.copy(alpha = 0.12f) else CityTheme.White
                     ),
-                    elevation = CardDefaults.cardElevation(0.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = if (hasUnread) 4.dp else 2.dp,
+                        pressedElevation = 6.dp
+                    ),
                     border = if (hasUnread) CardDefaults.outlinedCardBorder().copy(
                         brush = Brush.horizontalGradient(listOf(CityTheme.Gold, CityTheme.GoldLight))
                     ) else null
@@ -402,11 +403,10 @@ fun HomeScreen(navController: NavController) {
                 // Browse by Category — full-width card
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(4.dp, RoundedCornerShape(16.dp)),
+                        .fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     onClick = { navController.navigate("browse_by_category") }
                 ) {
                     Row(
@@ -448,11 +448,13 @@ fun HomeDashboardCard(
 ) {
     Card(
         modifier = modifier
-            .height(140.dp)
-            .shadow(4.dp, RoundedCornerShape(16.dp)),
+            .height(140.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-        elevation = CardDefaults.cardElevation(0.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp,
+            pressedElevation = 4.dp
+        ),
         onClick = onClick
     ) {
         Column(

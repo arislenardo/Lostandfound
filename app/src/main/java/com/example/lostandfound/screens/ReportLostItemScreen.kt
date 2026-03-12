@@ -119,7 +119,9 @@ fun ReportLostItemScreen(navController: NavController) {
 
     // Category Dropdown State
     var expandedCategory by remember { mutableStateOf(false) }
-    var isAutoClassified by remember { mutableStateOf(false) }
+
+    // Image embedding state
+    var imageVector by remember { mutableStateOf<List<Double>>(emptyList()) }
 
     val classifier = remember { TFLiteClassifier(context) }
 
@@ -136,12 +138,10 @@ fun ReportLostItemScreen(navController: NavController) {
                     MediaStore.Images.Media.getBitmap(context.contentResolver, it)
                 }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
 
-                val results = classifier.classify(bitmap)
-                if (results.isNotEmpty()) {
-                    val topResult = results[0]
-                    category = classifier.mapLabelToCategory(topResult)
-                    isAutoClassified = true
-                    Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                // Extract visual embedding for similarity matching
+                coroutineScope.launch(Dispatchers.Default) {
+                    val vec = classifier.extractFeatureVector(bitmap)
+                    withContext(Dispatchers.Main) { imageVector = vec }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -165,12 +165,10 @@ fun ReportLostItemScreen(navController: NavController) {
                         MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
                     }.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
 
-                    val results = classifier.classify(bitmap)
-                    if (results.isNotEmpty()) {
-                        val topResult = results[0]
-                        category = classifier.mapLabelToCategory(topResult)
-                        isAutoClassified = true
-                        Toast.makeText(context, "Classified as: $topResult", Toast.LENGTH_SHORT).show()
+                    // Extract visual embedding for similarity matching
+                    coroutineScope.launch(Dispatchers.Default) {
+                        val vec = classifier.extractFeatureVector(bitmap)
+                        withContext(Dispatchers.Main) { imageVector = vec }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -215,7 +213,9 @@ fun ReportLostItemScreen(navController: NavController) {
         }
     }
 
-    fun saveToFirestore(imageUrl: String?) {
+    var savedLostItemId by remember { mutableStateOf<String?>(null) }
+
+    fun saveToFirestore(imageUrl: String?, onComplete: ((String) -> Unit)? = null) {
         isSubmitting = true
         val dateObj = try {
             val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -233,17 +233,22 @@ fun ReportLostItemScreen(navController: NavController) {
             category = category,
             dateLost = dateObj ?: Date(),
             imageUrl = imageUrl ?: "",
-            status = "Lost",
+            imageVector = imageVector,
+            status = "PENDING",
             createdAt = Date()
         )
 
         db.collection("lost_items")
             .add(newItem)
             .addOnSuccessListener { lostItemRef ->
+                val lostId = lostItemRef.id
+                lostItemRef.update("id", lostId)
+                savedLostItemId = lostId
+
                 // 1. Persist potential matches as notifications
                 potentialMatches.forEach { (foundItem, score) ->
                     val matchNotif = com.example.lostandfound.model.MatchNotification(
-                        lostItemId = lostItemRef.id,
+                        lostItemId = lostId,
                         foundItemId = foundItem.id,
                         lostItemOwnerId = currentUser?.uid ?: "",
                         lostItemName = itemName,
@@ -257,23 +262,13 @@ fun ReportLostItemScreen(navController: NavController) {
                     }
                 }
 
-                // 2. Check if user is admin, if so, log it
-                if (com.example.lostandfound.data.AuthManager.isCurrentUserAdmin()) {
-                    val action = com.example.lostandfound.model.AdminAction(
-                        adminId = currentUser?.uid ?: "",
-                        adminName = currentUser?.email ?: "",
-                        actionType = "ADDED_LOST_ITEM",
-                        itemTitle = itemName,
-                        itemId = lostItemRef.id
-                    )
-                    db.collection("admin_history").add(action).addOnSuccessListener { doc ->
-                        db.collection("admin_history").document(doc.id).update("id", doc.id)
-                    }
+                if (onComplete != null) {
+                    onComplete(lostId)
+                } else {
+                    isSubmitting = false
+                    Toast.makeText(context, "Report Submitted", Toast.LENGTH_SHORT).show()
+                    navController.navigate("home") { popUpTo("home") { inclusive = true } }
                 }
-
-                isSubmitting = false
-                Toast.makeText(context, "Report Submitted", Toast.LENGTH_SHORT).show()
-                navController.navigate("home") { popUpTo("home") { inclusive = true } }
             }
             .addOnFailureListener {
                 isSubmitting = false
@@ -281,14 +276,14 @@ fun ReportLostItemScreen(navController: NavController) {
             }
     }
 
-    fun finalizeReportUpload() {
+    fun finalizeReportUpload(onComplete: ((String) -> Unit)? = null) {
         if (isSubmitting) return
         isSubmitting = true
         coroutineScope.launch {
             try {
                 val imageUrl = selectedImageUri?.let { uploadImageToStorage(it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "lost_items") }
                 withContext(Dispatchers.Main) {
-                    saveToFirestore(imageUrl)
+                    saveToFirestore(imageUrl, onComplete)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -299,23 +294,29 @@ fun ReportLostItemScreen(navController: NavController) {
         }
     }
 
-    fun startMatchingAndUpload(context: Context, db: FirebaseFirestore, scope: CoroutineScope) {
+    fun startMatchingAndSave(context: Context, db: FirebaseFirestore, scope: CoroutineScope) {
         scope.launch {
             isCheckingMatches = true
+            // Run matching algorithm first to see if we should show the dialog
             db.collection("found_items").get().addOnSuccessListener { result ->
-                // FIX: Include document ID in each FoundItem
                 val allFoundItems = result.documents.mapNotNull { doc ->
-                    doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
+                    val obj = doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
+                    if (obj != null && obj.status == "Found") obj else null
                 }
                 scope.launch {
                     val matches = withContext(Dispatchers.Default) {
-                        findPotentialMatches(itemName, description, category, allFoundItems)
+                        findPotentialMatches(itemName, description, category, imageVector, allFoundItems)
                     }
                     isCheckingMatches = false
                     if (matches.isNotEmpty()) {
                         potentialMatches = matches
-                        showMatchesDialog = true
+                        // Save the report FIRST so we have an ID to pass
+                        finalizeReportUpload { lostId ->
+                            isSubmitting = false
+                            showMatchesDialog = true
+                        }
                     } else {
+                        // No matches, just save and go home
                         finalizeReportUpload()
                     }
                 }
@@ -339,7 +340,8 @@ fun ReportLostItemScreen(navController: NavController) {
                         items(potentialMatches) { (item, score) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -356,7 +358,7 @@ fun ReportLostItemScreen(navController: NavController) {
                                     if (item.userId.isNotBlank()) {
                                         // Police Station Mode: No direct messaging
                                         Button(onClick = {
-                                            navController.navigate("found_item_detail/${item.id}")
+                                            navController.navigate("found_item_detail/${item.id}?lostItemId=$savedLostItemId")
                                         }, modifier = Modifier.fillMaxWidth()) {
                                             Text(stringResource(R.string.view_details_claim_button))
                                         }
@@ -367,8 +369,14 @@ fun ReportLostItemScreen(navController: NavController) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showMatchesDialog = false; finalizeReportUpload() }) { Text(stringResource(R.string.none_of_these_mine_button)) } },
-            dismissButton = { TextButton(onClick = { showMatchesDialog = false }) { Text(stringResource(R.string.cancel_button)) } }
+            confirmButton = { TextButton(onClick = { 
+                showMatchesDialog = false
+                navController.navigate("home") { popUpTo("home") { inclusive = true } }
+            }) { Text(stringResource(R.string.none_of_these_mine_button)) } },
+            dismissButton = { TextButton(onClick = { 
+                showMatchesDialog = false
+                navController.navigate("home") { popUpTo("home") { inclusive = true } }
+            }) { Text("Close") } }
         )
     }
 
@@ -377,7 +385,7 @@ fun ReportLostItemScreen(navController: NavController) {
             onDismissRequest = { showNoImageWarning = false },
             title = { Text("No Photo Attached") },
             text = { Text("Without a photo, our Smart AI cannot automatically match this to found items. Proceed anyway?") },
-            confirmButton = { TextButton(onClick = { showNoImageWarning = false; startMatchingAndUpload(context, db, coroutineScope) }) { Text("Yes, Proceed") } },
+            confirmButton = { TextButton(onClick = { showNoImageWarning = false; startMatchingAndSave(context, db, coroutineScope) }) { Text("Yes, Proceed") } },
             dismissButton = { TextButton(onClick = { showNoImageWarning = false }) { Text("Cancel") } }
         )
     }
@@ -426,10 +434,10 @@ fun ReportLostItemScreen(navController: NavController) {
             // SECTION 1: PHOTO
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -489,10 +497,10 @@ fun ReportLostItemScreen(navController: NavController) {
             // SECTION 2: DETAILS
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -524,12 +532,9 @@ fun ReportLostItemScreen(navController: NavController) {
                                 onDismissRequest = { expandedCategory = false }
                             ) {
                                 categories.forEach { opt ->
-                                    DropdownMenuItem(text = { Text(opt) }, onClick = { category = opt; expandedCategory = false; isAutoClassified = false })
+                                    DropdownMenuItem(text = { Text(opt) }, onClick = { category = opt; expandedCategory = false })
                                 }
                             }
-                        }
-                        if (isAutoClassified) {
-                            Text("✨ Auto-categorized by AI", style = MaterialTheme.typography.labelSmall, color = CityTheme.Gold, modifier = Modifier.padding(top=4.dp))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -556,10 +561,10 @@ fun ReportLostItemScreen(navController: NavController) {
             // SECTION 3: LOCATION
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp).shadow(3.dp, RoundedCornerShape(14.dp)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -657,7 +662,7 @@ fun ReportLostItemScreen(navController: NavController) {
                             } else if (selectedImageUri == null) {
                                 showNoImageWarning = true
                             } else {
-                                startMatchingAndUpload(context, db, coroutineScope)
+                                startMatchingAndSave(context, db, coroutineScope)
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),

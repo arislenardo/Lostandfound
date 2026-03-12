@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -107,7 +108,7 @@ fun MyMatchesScreen(navController: NavController) {
                         notification = notification,
                         onViewDetails = {
                             db.collection("match_notifications").document(notification.id).update("status", "READ")
-                            navController.navigate("found_item_detail/${notification.foundItemId}")
+                            navController.navigate("found_item_detail/${notification.foundItemId}?lostItemId=${notification.lostItemId}")
                         },
                         onDismiss = {
                             selectedNotification = notification
@@ -160,12 +161,27 @@ fun CityMatchNotificationCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().shadow(if (isUnread) 6.dp else 2.dp, RoundedCornerShape(16.dp)),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-        elevation = CardDefaults.cardElevation(0.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isUnread) CityTheme.White else androidx.compose.ui.graphics.Color.Transparent
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isUnread) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(CityTheme.Gold)
+                )
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -198,17 +214,18 @@ fun CityMatchNotificationCard(
             )
 
             Spacer(Modifier.height(14.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onViewDetails,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                ) {
-                    Text("View Details to Claim", fontSize = 13.sp)
-                }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Default.Close, "Dismiss", tint = CityTheme.Brown.copy(alpha = 0.4f))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onViewDetails,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                    ) {
+                        Text("View Details to Claim", fontSize = 13.sp)
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Close, "Dismiss", tint = CityTheme.Brown.copy(alpha = 0.4f))
+                    }
                 }
             }
         }

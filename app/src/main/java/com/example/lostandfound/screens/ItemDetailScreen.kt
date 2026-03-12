@@ -188,14 +188,23 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
             ) {
                 // Image
                 if (item!!.imageUrl.isNotBlank() && !isEditing) {
-                    Card(Modifier.fillMaxWidth().height(200.dp).shadow(4.dp, RoundedCornerShape(16.dp)), RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(0.dp)) {
+                    Card(
+                        Modifier.fillMaxWidth().height(200.dp),
+                        RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
                         AsyncImage(model = item!!.imageUrl, contentDescription = "Item Image", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                 }
 
                 if (isEditing) {
                     // Edit fields
-                    Card(Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(16.dp)), RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(CityTheme.White), elevation = CardDefaults.cardElevation(0.dp)) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(CityTheme.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = CityTheme.Green, unfocusedBorderColor = CityTheme.Brown.copy(0.25f), focusedLabelColor = CityTheme.Green, cursorColor = CityTheme.Green)
                             OutlinedTextField(editName, { editName = it }, Modifier.fillMaxWidth(), label = { Text("Item Name") }, shape = RoundedCornerShape(12.dp), colors = fc)
@@ -276,10 +285,10 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
 @Composable
 fun CityDetailCard(title: String, tint: androidx.compose.ui.graphics.Color = CityTheme.Green, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().shadow(3.dp, RoundedCornerShape(14.dp)),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

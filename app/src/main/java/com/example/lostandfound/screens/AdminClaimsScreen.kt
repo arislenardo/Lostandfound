@@ -67,6 +67,14 @@ fun AdminClaimsScreen(navController: NavController) {
         
         db.collection("claims").document(claim.id).update(updates)
             .addOnSuccessListener {
+                // ALSO: Sync this status back to the original lost item if it exists
+                if (claim.lostItemId.isNotBlank()) {
+                    db.collection("lost_items").document(claim.lostItemId).update("status", newStatus)
+                }
+                // ALSO: If approved, mark the found item as CLAIMED so it disappears from public search
+                if (newStatus == "APPROVED") {
+                    db.collection("found_items").document(claim.itemId).update("status", "CLAIMED")
+                }
                 // 1. Create a notification for the user
                 val notification = com.example.lostandfound.model.ClaimNotification(
                     claimId = claim.id,
@@ -192,10 +200,10 @@ fun AdminClaimsScreen(navController: NavController) {
 @Composable
 fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit, onMessage: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(16.dp)),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CityTheme.White),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Gold accent left border
@@ -245,12 +253,13 @@ fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Uni
             }
 
             Spacer(Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Message button
                 OutlinedButton(
                     onClick = onMessage,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
                     border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
                         brush = Brush.horizontalGradient(listOf(CityTheme.Brown.copy(0.3f), CityTheme.Brown.copy(0.3f)))
                     ),
@@ -258,12 +267,14 @@ fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Uni
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Message", fontSize = 13.sp)
+                    Text("Message", fontSize = 12.sp, maxLines = 1)
                 }
                 // Reject button
                 OutlinedButton(
                     onClick = onReject,
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
                     border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
                         brush = Brush.horizontalGradient(listOf(CityTheme.Error.copy(0.5f), CityTheme.Error.copy(0.5f)))
                     ),
@@ -271,17 +282,19 @@ fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Uni
                 ) {
                     Icon(Icons.Default.Close, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Reject", fontSize = 13.sp)
+                    Text("Reject", fontSize = 12.sp, maxLines = 1)
                 }
                 // Approve button
                 Button(
                     onClick = onApprove,
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
                 ) {
                     Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Approve", fontSize = 13.sp)
+                    Text("Approve", fontSize = 12.sp, maxLines = 1)
                 }
             }
         }

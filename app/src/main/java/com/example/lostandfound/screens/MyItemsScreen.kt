@@ -2,6 +2,7 @@ package com.example.lostandfound.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -218,19 +219,20 @@ fun MyItemsScreen(navController: NavController) {
                 onDismissRequest = { showFoundConfirm = false },
                 shape = RoundedCornerShape(16.dp),
                 title = { Text("Item Found?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
-                text = { Text("Are you sure? This will remove the '${itemToMarkFound!!.name}' report from the system. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
+                text = { Text("Are you sure? This will mark the '${itemToMarkFound!!.name}' report as FOUND in the system. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
                 confirmButton = {
                     Button(
                         onClick = {
-                            db.collection("lost_items").document(itemToMarkFound!!.id).delete()
+                            db.collection("lost_items").document(itemToMarkFound!!.id).update("status", "FOUND")
                                 .addOnSuccessListener {
                                     Toast.makeText(context, "Marked as Found!", Toast.LENGTH_SHORT).show()
-                                    allItems = allItems.filter { it.id != itemToMarkFound!!.id }
+                                    // Update local state to reflect change without removing from list
+                                    allItems = allItems.map { if (it.id == itemToMarkFound!!.id) it.copy(status = "FOUND") else it }
                                 }
                             showFoundConfirm = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                    ) { Text("Yes, Found It") }
+                    ) { Text("Yes, Mark Found") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showFoundConfirm = false }) {
@@ -292,14 +294,52 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                     Text("By: ${item.email}", fontSize = 10.sp, color = CityTheme.Brown.copy(0.4f))
                 }
 
-                if (!isAdmin) {
+                if (item.status != "APPROVED" && item.status != "REJECTED" && item.status != "FOUND" && item.status != "CLAIM_PENDING" && item.status != "DISPUTED") {
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = onFound,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                    ) { Text("I Found It (Remove)", fontSize = 13.sp) }
+                    ) { Text("I Found It (Mark Found)", fontSize = 13.sp) }
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    val (statusLabel, statusColor) = when (item.status) {
+                        "APPROVED"      -> "APPROVED (Pick up at Station)" to CityTheme.Green
+                        "REJECTED"      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
+                        "DISPUTED"      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
+                        "FOUND"         -> "FOUND & RESOLVED" to CityTheme.Green
+                        "CLAIM_PENDING" -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
+                        else            -> "STATUS: ${item.status}" to CityTheme.Gold
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = statusColor.copy(alpha = 0.12f),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clickable(enabled = item.claimedFoundItemId.isNotBlank()) {
+                                navController.navigate("found_item_detail/${item.claimedFoundItemId}?lostItemId=${item.id}")
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(statusColor))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(statusLabel, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            if (item.claimedFoundItemId.isNotBlank()) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = statusColor
+                                )
+                            }
+                        }
+                    }
                 }
             }
             if (isAdmin) {

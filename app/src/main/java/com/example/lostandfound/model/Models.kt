@@ -13,9 +13,10 @@ data class FoundItem(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val category: String = "",
-    val dateFound: Date = Date(), // Already correct
+    val dateFound: Date = Date(),
     val dateFoundText: String = "",
-    val imageUrl: String = "",    // Added for photo support
+    val imageUrl: String = "",
+    val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
     val status: String = "Found",
     val createdAt: Date? = null
 )
@@ -30,9 +31,11 @@ data class LostItem(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val category: String = "",
-    val dateLost: Date = Date(),  // CHANGED: String -> Date
-    val imageUrl: String = "",    // Added for photo support
+    val dateLost: Date = Date(),
+    val imageUrl: String = "",
+    val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
     val status: String = "Lost",
+    val claimedFoundItemId: String = "",
     val createdAt: Date? = null
 )
 
