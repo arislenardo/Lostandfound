@@ -550,6 +550,18 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                                                         "claimedFoundItemId" to item!!.id
                                                                     )
                                                                 )
+                                                                // Mark the match_notification as READ — claim was actioned
+                                                                db.collection("match_notifications")
+                                                                    .whereEqualTo("lostItemId", lostItemId)
+                                                                    .whereEqualTo("foundItemId", item!!.id)
+                                                                    .get()
+                                                                    .addOnSuccessListener { snap ->
+                                                                        val batch = db.batch()
+                                                                        snap.documents.forEach { d ->
+                                                                            batch.update(d.reference, "status", com.example.lostandfound.model.MatchNotificationStatus.READ)
+                                                                        }
+                                                                        if (!snap.isEmpty) batch.commit()
+                                                                    }
                                                             }
                                                             
                                                             showClaimDialog = false; isSubmittingClaim = false

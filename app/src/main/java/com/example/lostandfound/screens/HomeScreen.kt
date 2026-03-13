@@ -43,6 +43,10 @@ fun HomeScreen(navController: NavController) {
     val firstName = state.firstName
     val isAdmin = state.isAdmin
     val notifCount = state.notifCount
+    val unreadMessages = state.unreadMessages
+    val unreadMatches = state.unreadMatches
+    val pendingClaims = state.pendingClaims
+    val unreadClaimUpdates = state.unreadClaimUpdates
 
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -55,8 +59,24 @@ fun HomeScreen(navController: NavController) {
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutDialog = false
-                    auth.signOut()
-                    navController.navigate("login") { popUpTo("home") { inclusive = true } }
+                    val user = auth.currentUser
+                    if (user != null) {
+                        FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                            .update("fcmToken", "")
+                            .addOnCompleteListener {
+                                auth.signOut()
+                                navController.navigate("login") { 
+                                    popUpTo(0) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+                    } else {
+                        auth.signOut()
+                        navController.navigate("login") { 
+                            popUpTo(0) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 }) { Text("Log Out", color = CityTheme.Error, fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
@@ -224,6 +244,7 @@ fun HomeScreen(navController: NavController) {
                     subtitle = if (isAdmin) "All lost records" else "Your lost reports",
                     icon = Icons.AutoMirrored.Filled.List,
                     iconBackground = CityTheme.Brown,
+                    badgeCount = if (isAdmin) 0 else unreadClaimUpdates,
                     modifier = Modifier.weight(1f),
                     onClick = { navController.navigate("my_items") }
                 )
@@ -232,6 +253,7 @@ fun HomeScreen(navController: NavController) {
                     subtitle = "Official communications",
                     icon = Icons.AutoMirrored.Filled.Send,
                     iconBackground = CityTheme.GreenLight,
+                    badgeCount = unreadMessages,
                     modifier = Modifier.weight(1f),
                     onClick = { navController.navigate("conversations") }
                 )
@@ -240,36 +262,16 @@ fun HomeScreen(navController: NavController) {
 
             // ── Potential Matches (non-admin only) ───────────────────────────
             if (!isAdmin) {
-                var unreadCount by remember { mutableStateOf(0) }
-                val db = FirebaseFirestore.getInstance()
-                val userId = currentUser?.uid
-
-                LaunchedEffect(userId) {
-                    if (userId != null) {
-                        db.collection("match_notifications")
-                            .whereEqualTo("lostItemOwnerId", userId)
-                            .whereEqualTo("status", "UNREAD")
-                            .get()
-                            .addOnSuccessListener { unreadCount = it.size() }
-                    }
-                }
-
-                val hasUnread = unreadCount > 0
+                val hasUnread = unreadMatches > 0
                 Card(
                     onClick = { navController.navigate("my_matches") },
                     modifier = Modifier
                         .fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (hasUnread) CityTheme.Gold.copy(alpha = 0.12f) else CityTheme.White
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = CityTheme.White),
                     elevation = CardDefaults.cardElevation(
-                        defaultElevation = if (hasUnread) 4.dp else 2.dp,
+                        defaultElevation = 2.dp,
                         pressedElevation = 6.dp
-                    ),
-                    border = if (hasUnread) CardDefaults.outlinedCardBorder().copy(
-                        brush = Brush.horizontalGradient(listOf(CityTheme.Gold, CityTheme.GoldLight))
-                    ) else null
+                    )
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -281,12 +283,12 @@ fun HomeScreen(navController: NavController) {
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (hasUnread) CityTheme.Gold else CityTheme.Green.copy(alpha = 0.15f)),
+                                    .background(CityTheme.Green.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.Search, null,
-                                    tint = if (hasUnread) CityTheme.White else CityTheme.Green,
+                                    tint = CityTheme.Green,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -298,7 +300,7 @@ fun HomeScreen(navController: NavController) {
                         }
                         if (hasUnread) {
                             Badge(containerColor = CityTheme.Gold) {
-                                Text("$unreadCount", color = CityTheme.White, fontSize = 11.sp)
+                                Text(if (unreadMatches > 9) "9+" else "$unreadMatches", color = CityTheme.White, fontSize = 11.sp)
                             }
                         }
                     }
@@ -317,26 +319,16 @@ fun HomeScreen(navController: NavController) {
                         modifier = Modifier.weight(1f),
                         onClick = { navController.navigate("lost") }
                     )
+                    // Check Claims card
                     HomeDashboardCard(
                         title = "Review Claims",
                         subtitle = "Pending approvals",
                         icon = Icons.Default.Person,
                         iconBackground = CityTheme.Brown,
+                        badgeCount = pendingClaims,
                         modifier = Modifier.weight(1f),
                         onClick = { navController.navigate("admin_claims") }
                     )
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeDashboardCard(
-                        title = "Admin Maintenance",
-                        subtitle = "Danger Zone / Reset",
-                        icon = Icons.Default.Build,
-                        iconBackground = CityTheme.Error,
-                        modifier = Modifier.weight(1f),
-                        onClick = { navController.navigate("admin_maintenance") }
-                    )
-                    Spacer(modifier = Modifier.weight(1f)) // Half-width spacer
                 }
                 Spacer(Modifier.height(12.dp))
                 // Browse by Category — full-width card
@@ -382,6 +374,7 @@ fun HomeDashboardCard(
     subtitle: String,
     icon: ImageVector,
     iconBackground: Color,
+    badgeCount: Int = 0,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -402,14 +395,25 @@ fun HomeDashboardCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(iconBackground),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Icon(icon, null, tint = CityTheme.White, modifier = Modifier.size(24.dp))
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(iconBackground),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, null, tint = CityTheme.White, modifier = Modifier.size(24.dp))
+                }
+                if (badgeCount > 0) {
+                    Badge(containerColor = CityTheme.Gold) {
+                        Text(if (badgeCount > 9) "9+" else "$badgeCount", color = CityTheme.White, fontSize = 11.sp)
+                    }
+                }
             }
             Column {
                 Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = CityTheme.Brown, maxLines = 2)

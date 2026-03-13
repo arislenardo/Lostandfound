@@ -9,8 +9,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.tasks.Tasks
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +53,11 @@ data class UnifiedNotification(
 
 enum class NotificationType { MESSAGE, MATCH, CLAIM_PENDING, CLAIM_UPDATE }
 
+// Persists across screen navigations for the app session — prevents cleared cards from reappearing
+private object NotificationReadCache {
+    val messageIds = mutableSetOf<String>()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationInboxScreen(navController: NavController) {
@@ -56,13 +66,14 @@ fun NotificationInboxScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
     
     var isAdmin by remember { mutableStateOf(false) }
-    var notifications by remember { mutableStateOf<List<UnifiedNotification>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var showClearDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     // Fetch Admin Status
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
-            isAdmin = AuthManager.isCurrentUserAdmin()
+            isAdmin = AuthManager.refreshAdminStatus()
         }
     }
 
@@ -77,89 +88,159 @@ fun NotificationInboxScreen(navController: NavController) {
     val rawMatches = remember { mutableStateListOf<MatchNotification>() }
     val rawClaims = remember { mutableStateListOf<Claim>() }
     val rawClaimNotifs = remember { mutableStateListOf<ClaimNotification>() }
+    // Reactive Unified List — NO key args so derivedStateOf tracks SnapshotStateList content changes
+    val notifications by remember {
+        derivedStateOf {
+            val combined = mutableListOf<UnifiedNotification>()
+            
+            // 1. Process Messages — only INCOMING (receiverId == currentUserId)
+            // Group by senderId so each conversation thread has one card
+            val threads = rawMessages.groupBy { it.senderId }
 
-    fun updateUnifiedList() {
-        // Only stop loading when appropriate initial snapshots are loaded
+            threads.forEach { (peerId, msgs) ->
+                val hasUnread = msgs.any { it.isRead != true }
+                if (hasUnread) {
+                    val latestUnread = msgs.filter { it.isRead != true }.maxByOrNull { it.timestamp }!!
+                    val peerName = latestUnread.senderName
+
+                    combined.add(
+                        UnifiedNotification(
+                            id = latestUnread.id,
+                            type = NotificationType.MESSAGE,
+                            title = "Message from ${if(peerName.isNotBlank()) peerName else "User"}",
+                            preview = latestUnread.text,
+                            timestamp = latestUnread.timestamp,
+                            isUnread = true,
+                            actionData = peerId,
+                            actionData2 = if (peerName.isNotBlank()) peerName else "User"
+                        )
+                    )
+                }
+            }
+
+            // 2. Process Matches (Only unread)
+            rawMatches.forEach { match ->
+                if (match.status == MatchNotificationStatus.UNREAD) {
+                    combined.add(
+                        UnifiedNotification(
+                            id = match.id,
+                            type = NotificationType.MATCH,
+                            title = "New Match Found!",
+                            preview = "Potential match for: ${match.lostItemName}",
+                            timestamp = match.createdAt,
+                            isUnread = true,
+                            actionData = match.foundItemId,
+                            actionData2 = match.lostItemId
+                        )
+                    )
+                }
+            }
+
+            // 3. Process Claims (Admin)
+            if (isAdmin) {
+                rawClaims.forEach { claim ->
+                    val isDispute = claim.status == ClaimStatus.DISPUTED
+                    combined.add(
+                        UnifiedNotification(
+                            id = claim.id,
+                            type = NotificationType.CLAIM_PENDING,
+                            title = if (isDispute) "CLAIM DISPUTED" else "Action Required: Claim",
+                            preview = if (isDispute) "${claim.userName} is contesting a rejection" else "${claim.userName} claims: ${if(claim.itemName.isNotBlank()) claim.itemName else "Item #${claim.itemId.take(4)}"}",
+                            timestamp = claim.timestamp,
+                            isUnread = true,
+                            actionData = "admin_claims"
+                        )
+                    )
+                }
+            }
+
+            // 4. Process Claim Updates (Only unread)
+            rawClaimNotifs.forEach { notif ->
+                if (!notif.isRead) {
+                    combined.add(
+                        UnifiedNotification(
+                            id = notif.id,
+                            type = NotificationType.CLAIM_UPDATE,
+                            title = "Claim ${notif.status}",
+                            preview = "Your claim for ${notif.itemName} was ${notif.status.lowercase()}",
+                            timestamp = notif.timestamp,
+                            isUnread = true,
+                            actionData = notif.itemId
+                        )
+                    )
+                }
+            }
+
+            // Sort by newest first
+            combined.sortedByDescending { it.timestamp }
+        }
+    }
+
+    // Update isLoading state when everything is initially loaded
+    LaunchedEffect(msgLoaded, matchLoaded, claimNotifLoaded, adminClaimLoaded) {
         if (msgLoaded && matchLoaded && claimNotifLoaded && (!isAdmin || adminClaimLoaded)) {
             isLoading = false
         }
+    }
 
-        val combined = mutableListOf<UnifiedNotification>()
-        
-        // 1. Process Messages (Only showing unread, or most recent unread per user)
-        val activeSenders = rawMessages.filter { it.receiverId == currentUserId && !it.isRead }
-            .groupBy { it.senderId }
-            
-        activeSenders.forEach { (senderId, msgs) ->
-            val latest = msgs.maxByOrNull { it.timestamp }
-            if (latest != null) {
-                val senderName = if (latest.senderName.isNotBlank()) latest.senderName else "User"
-                combined.add(
-                    UnifiedNotification(
-                        id = latest.id,
-                        type = NotificationType.MESSAGE,
-                        title = "New message from $senderName",
-                        preview = latest.text,
-                        timestamp = latest.timestamp,
-                        isUnread = true,
-                        actionData = senderId,
-                        actionData2 = senderName
-                    )
-                )
+    // Track IDs we've locally marked as read — lives in a singleton so navigation can't reset it
+    val locallyReadMessageIds = NotificationReadCache.messageIds
+
+    // Merge incoming messages into rawMessages, preserving local read state
+    fun updateRawMessages(docs: List<com.google.firebase.firestore.DocumentSnapshot>) {
+        val newMsgs = docs.mapNotNull {
+            try { it.toObject(Message::class.java)?.copy(id = it.id) } catch(e:Exception) { null }
+        }
+        rawMessages.clear()
+        // Never revert a message we've already locally marked as read
+        rawMessages.addAll(newMsgs.map { msg ->
+            if (msg.id in locallyReadMessageIds) msg.copy(isRead = true) else msg
+        })
+        msgLoaded = true
+    }
+
+    fun clearAllNotifications() {
+        val batch = db.batch()
+        var updates = 0
+
+        // 1. Mark messages read Locally & Build Batch
+        for (i in rawMessages.indices) {
+            val msg = rawMessages[i]
+            if (msg.receiverId == currentUserId && msg.isRead != true) {
+                locallyReadMessageIds.add(msg.id)       // Prevent snapshot revert
+                rawMessages[i] = msg.copy(isRead = true) // Optimistic Update
+                batch.update(db.collection("messages").document(msg.id), "isRead", true)
+                updates++
             }
         }
 
-        // 2. Process Matches
-        rawMatches.forEach { match ->
-            combined.add(
-                UnifiedNotification(
-                    id = match.id,
-                    type = NotificationType.MATCH,
-                    title = "New Match Found!",
-                    preview = "Potential match for: ${match.lostItemName}",
-                    timestamp = match.createdAt,
-                    isUnread = match.status == MatchNotificationStatus.UNREAD,
-                    actionData = match.foundItemId,
-                    actionData2 = match.lostItemId
-                )
-            )
-        }
-
-        // 3. Process Claims (Admin Only)
-        if (isAdmin) {
-            rawClaims.forEach { claim ->
-                val isDispute = claim.status == ClaimStatus.DISPUTED
-                combined.add(
-                    UnifiedNotification(
-                        id = claim.id,
-                        type = NotificationType.CLAIM_PENDING,
-                        title = if (isDispute) "CLAIM DISPUTED" else "Action Required: Claim",
-                        preview = if (isDispute) "${claim.userName} is contesting a rejection" else "${claim.userName} claims: ${if(claim.itemName.isNotBlank()) claim.itemName else "Item #${claim.itemId.take(4)}"}",
-                        timestamp = claim.timestamp,
-                        isUnread = true,
-                        actionData = "admin_claims"
-                    )
-                )
+        // 2. Mark matches as read Locally & Build Batch
+        for (i in rawMatches.indices) {
+            val match = rawMatches[i]
+            if (match.status == MatchNotificationStatus.UNREAD) {
+                rawMatches[i] = match.copy(status = MatchNotificationStatus.READ) // Optimistic Update
+                batch.update(db.collection("match_notifications").document(match.id), "status", MatchNotificationStatus.READ)
+                updates++
             }
         }
 
-        // 4. Process Claim Updates (Approved/Rejected)
-        rawClaimNotifs.forEach { notif ->
-            combined.add(
-                UnifiedNotification(
-                    id = notif.id,
-                    type = NotificationType.CLAIM_UPDATE,
-                    title = "Claim ${notif.status}",
-                    preview = "Your claim for ${notif.itemName} was ${notif.status.lowercase()}",
-                    timestamp = notif.timestamp,
-                    isUnread = !notif.isRead,
-                    actionData = notif.itemId
-                )
-            )
+        // 3. Mark claim updates as read Locally & Build Batch
+        for (i in rawClaimNotifs.indices) {
+            val notif = rawClaimNotifs[i]
+            if (!notif.isRead) {
+                rawClaimNotifs[i] = notif.copy(isRead = true) // Optimistic Update
+                batch.update(db.collection("claim_notifications").document(notif.id), "isRead", true)
+                updates++
+            }
         }
 
-        // Sort by newest first
-        notifications = combined.sortedByDescending { it.timestamp }
+        if (updates > 0) {
+            batch.commit()
+                .addOnSuccessListener { Toast.makeText(context, "Inbox cleared", Toast.LENGTH_SHORT).show() }
+                .addOnFailureListener { Toast.makeText(context, "Clear failed: ${it.message}", Toast.LENGTH_LONG).show() }
+        } else {
+            Toast.makeText(context, "Nothing to clear", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // Effect for User-Specific Listeners
@@ -169,28 +250,21 @@ fun NotificationInboxScreen(navController: NavController) {
             return@DisposableEffect onDispose { }
         }
 
-        val msgListener = db.collection("messages")
+        // Only listen to INCOMING messages — outgoing never create notifications
+        val incomingListener = db.collection("messages")
             .whereEqualTo("receiverId", currentUserId)
-            .whereEqualTo("isRead", false)
             .addSnapshotListener { snap, _ ->
-                rawMessages.clear()
-                snap?.documents?.forEach { doc ->
-                    try { doc.toObject(Message::class.java)?.copy(id = doc.id)?.let { rawMessages.add(it) } } catch(e:Exception){}
-                }
-                msgLoaded = true
-                updateUnifiedList()
+                updateRawMessages(snap?.documents ?: emptyList())
             }
 
         val matchListener = db.collection("match_notifications")
             .whereEqualTo("lostItemOwnerId", currentUserId)
-            .whereIn("status", listOf(MatchNotificationStatus.UNREAD, MatchNotificationStatus.READ))
             .addSnapshotListener { snap, _ ->
                 rawMatches.clear()
                 snap?.documents?.forEach { doc ->
                      doc.toObject(MatchNotification::class.java)?.copy(id = doc.id)?.let { rawMatches.add(it) }
                 }
                 matchLoaded = true
-                updateUnifiedList()
             }
 
         val claimNotifListener = db.collection("claim_notifications")
@@ -201,11 +275,10 @@ fun NotificationInboxScreen(navController: NavController) {
                     doc.toObject(ClaimNotification::class.java)?.copy(id = doc.id)?.let { rawClaimNotifs.add(it) }
                 }
                 claimNotifLoaded = true
-                updateUnifiedList()
             }
 
         onDispose {
-            msgListener.remove()
+            incomingListener.remove()
             matchListener.remove()
             claimNotifListener.remove()
             msgLoaded = false
@@ -214,12 +287,12 @@ fun NotificationInboxScreen(navController: NavController) {
         }
     }
 
+
     // Effect for Admin-Specific Listeners
     DisposableEffect(currentUserId, isAdmin) {
         if (!isAdmin || currentUserId.isBlank()) {
             adminClaimLoaded = false
             rawClaims.clear()
-            updateUnifiedList()
             // If the user isn't an admin, we might need to trigger stop loading if we were waiting for this
             if (msgLoaded && matchLoaded && claimNotifLoaded) {
                 isLoading = false
@@ -235,7 +308,6 @@ fun NotificationInboxScreen(navController: NavController) {
                     doc.toObject(Claim::class.java)?.copy(id = doc.id)?.let { rawClaims.add(it) }
                 }
                 adminClaimLoaded = true
-                updateUnifiedList()
             }
 
         onDispose {
@@ -264,6 +336,13 @@ fun NotificationInboxScreen(navController: NavController) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
                     }
                 },
+                actions = {
+                    if (notifications.isNotEmpty()) {
+                        IconButton(onClick = { showClearDialog = true }) {
+                            Icon(Icons.Default.DeleteSweep, "Clear All", tint = CityTheme.White)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
             )
         }
@@ -286,16 +365,46 @@ fun NotificationInboxScreen(navController: NavController) {
                 modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(notifications) { notif ->
-                    CityNotificationItem(notif, navController)
+                items(notifications, key = { it.id }) { notif ->
+                    CityNotificationItem(notif, navController, db, currentUserId, rawMessages, rawMatches, rawClaimNotifs, locallyReadMessageIds)
                 }
             }
+        }
+        
+        if (showClearDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearDialog = false },
+                title = { Text("Clear Notifications?") },
+                text = { Text("This will mark all notifications as read.") },
+                confirmButton = {
+                    TextButton(onClick = { 
+                        clearAllNotifications()
+                        showClearDialog = false 
+                    }) {
+                        Text("Clear All", color = CityTheme.Error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }
 
 @Composable
-fun CityNotificationItem(notification: UnifiedNotification, navController: NavController) {
+fun CityNotificationItem(
+    notification: UnifiedNotification, 
+    navController: NavController,
+    db: FirebaseFirestore,
+    currentUserId: String,
+    rawMessages: androidx.compose.runtime.snapshots.SnapshotStateList<Message>,
+    rawMatches: androidx.compose.runtime.snapshots.SnapshotStateList<MatchNotification>,
+    rawClaimNotifs: androidx.compose.runtime.snapshots.SnapshotStateList<ClaimNotification>,
+    locallyReadMessageIds: MutableSet<String>
+) {
     val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
     
     val (iconText, iconColor) = when (notification.type) {
@@ -306,31 +415,42 @@ fun CityNotificationItem(notification: UnifiedNotification, navController: NavCo
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { 
-                when(notification.type) {
-                    NotificationType.MESSAGE -> navController.navigate("chat/${notification.actionData}/${notification.actionData2}")
-                    NotificationType.MATCH -> {
-                        FirebaseFirestore.getInstance().collection("match_notifications").document(notification.id).update("status", MatchNotificationStatus.READ)
-                        navController.navigate("found_item_detail/${notification.actionData}?lostItemId=${notification.actionData2}")
-                    }
-                    NotificationType.CLAIM_PENDING -> navController.navigate("admin_claims")
-                    NotificationType.CLAIM_UPDATE -> {
-                        // Mark as read when clicking
-                        FirebaseFirestore.getInstance().collection("claim_notifications").document(notification.id).update("isRead", true)
-                        navController.navigate("found_item_detail/${notification.actionData}")
-                    }
-                }
-            },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (notification.isUnread) CityTheme.White else androidx.compose.ui.graphics.Color.Transparent
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp)
     ) {
+        val context = LocalContext.current
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { 
+                    when(notification.type) {
+                        NotificationType.MESSAGE -> {
+                            // Mark all messages from this sender as read (optimistic)
+                            for (i in rawMessages.indices) {
+                                val msg = rawMessages[i]
+                                if (msg.senderId == notification.actionData && msg.isRead != true) {
+                                    locallyReadMessageIds.add(msg.id)  // Prevent snapshot revert
+                                    rawMessages[i] = msg.copy(isRead = true)
+                                    db.collection("messages").document(msg.id).update("isRead", true)
+                                }
+                            }
+                            navController.navigate("chat/${notification.actionData}/${notification.actionData2}")
+                        }
+                        NotificationType.MATCH -> {
+                            FirebaseFirestore.getInstance().collection("match_notifications").document(notification.id).update("status", MatchNotificationStatus.READ)
+                            navController.navigate("found_item_detail/${notification.actionData}?lostItemId=${notification.actionData2}")
+                        }
+                        NotificationType.CLAIM_PENDING -> navController.navigate("admin_claims")
+                        NotificationType.CLAIM_UPDATE -> {
+                            FirebaseFirestore.getInstance().collection("claim_notifications").document(notification.id).update("isRead", true)
+                            navController.navigate("found_item_detail/${notification.actionData}")
+                        }
+                    }
+                }
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (notification.isUnread) {
@@ -378,6 +498,52 @@ fun CityNotificationItem(notification: UnifiedNotification, navController: NavCo
                 fontSize = 10.sp,
                 color = CityTheme.Brown.copy(alpha = 0.4f)
             )
+
+            Spacer(Modifier.width(8.dp))
+
+            // Delete / Dismiss Icon
+            IconButton(
+                onClick = {
+                    when (notification.type) {
+                        NotificationType.MESSAGE -> {
+                            // Mark all messages from this sender as read (optimistic dismiss)
+                            for (i in rawMessages.indices) {
+                                val msg = rawMessages[i]
+                                if (msg.senderId == notification.actionData && msg.isRead != true) {
+                                    locallyReadMessageIds.add(msg.id)  // Prevent snapshot revert
+                                    rawMessages[i] = msg.copy(isRead = true)
+                                    db.collection("messages").document(msg.id).update("isRead", true)
+                                }
+                            }
+                        }
+                        NotificationType.MATCH -> {
+                            // Mark as read (don't delete), update locally and in DB
+                            rawMatches.replaceAll { if (it.id == notification.id) it.copy(status = MatchNotificationStatus.READ) else it }
+                            db.collection("match_notifications").document(notification.id)
+                                .update("status", MatchNotificationStatus.READ)
+                                .addOnFailureListener { Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_SHORT).show() }
+                        }
+                        NotificationType.CLAIM_UPDATE -> {
+                            // Mark as read (don't delete), update locally and in DB
+                            rawClaimNotifs.replaceAll { if (it.id == notification.id) it.copy(isRead = true) else it }
+                            db.collection("claim_notifications").document(notification.id)
+                                .update("isRead", true)
+                                .addOnFailureListener { Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_SHORT).show() }
+                        }
+                        NotificationType.CLAIM_PENDING -> {
+                            // Admins shouldn't delete pending claims here
+                        }
+                    }
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.DeleteOutline,
+                    contentDescription = "Remove",
+                    tint = CityTheme.Brown.copy(alpha = 0.3f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

@@ -22,11 +22,13 @@ import androidx.compose.material.icons.filled.DateRange
 
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.example.lostandfound.ui.theme.CityTheme
 import androidx.compose.runtime.*
@@ -55,6 +57,11 @@ import com.example.lostandfound.utils.uploadImageToStorage
 import com.example.lostandfound.utils.getReadableAddress
 import com.example.lostandfound.utils.TFLiteClassifier
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.border
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -260,6 +267,8 @@ fun ReportLostItemScreen(navController: NavController) {
                         lostItemOwnerId = currentUser?.uid ?: "",
                         lostItemName = itemName,
                         foundItemName = foundItem.name,
+                        foundItemImageUrl = foundItem.imageUrl,
+                        foundItemLocation = foundItem.location,
                         matchScore = score,
                         status = MatchNotificationStatus.UNREAD,
                         createdAt = java.util.Date()
@@ -335,57 +344,231 @@ fun ReportLostItemScreen(navController: NavController) {
     }
 
     // --- DIALOGS ---
-    if (showMatchesDialog) {
+    if (isCheckingMatches) {
         AlertDialog(
-            onDismissRequest = { showMatchesDialog = false },
-            title = { Text(stringResource(R.string.potential_matches_title)) },
+            onDismissRequest = { /* Prevent dismissal */ },
+            title = null,
             text = {
-                Column {
-                    Text(stringResource(R.string.potential_matches_message))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.height(250.dp)) {
-                        items(potentialMatches) { (item, score) ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = CityTheme.Cream),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    CircularProgressIndicator(color = CityTheme.Green)
+                    Spacer(Modifier.height(16.dp))
+                    Text("Smart AI Scanning...", color = CityTheme.Brown, fontWeight = FontWeight.Bold)
+                    Text("Looking for visual and keyword matches", fontSize = 12.sp, color = CityTheme.Brown.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                }
+            },
+            confirmButton = {},
+            containerColor = CityTheme.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (showMatchesDialog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showMatchesDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.85f)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CityTheme.Cream)
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Gradient Header
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(CityTheme.Green, CityTheme.Green.copy(alpha = 0.75f))
+                                )
+                            )
+                            .padding(horizontal = 20.dp, vertical = 20.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(CityTheme.Gold.copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(item.name, style = MaterialTheme.typography.titleMedium)
-                                        Text(
-                                            text = stringResource(R.string.match_percentage, (score * 100).toInt()),
-                                            color = CityTheme.Gold,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
+                                Text("🏆", fontSize = 26.sp)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "Potential Matches Found!",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                color = CityTheme.White,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Our AI found ${potentialMatches.size} possible match${if (potentialMatches.size > 1) "es" else ""} for your lost item",
+                                fontSize = 12.sp,
+                                color = CityTheme.White.copy(alpha = 0.82f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // Cards List
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(potentialMatches) { (item, score) ->
+                            val matchPct = (score * 100).toInt()
+                            val matchColor = when {
+                                matchPct >= 70 -> CityTheme.Green
+                                matchPct >= 40 -> CityTheme.Gold
+                                else           -> CityTheme.Brown.copy(alpha = 0.6f)
+                            }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                            ) {
+                                Column {
+                                    // Item image
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(140.dp)
+                                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                                    ) {
+                                        if (item.imageUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(item.imageUrl)
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = item.name,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(CityTheme.Cream),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text("📦", fontSize = 40.sp)
+                                            }
+                                        }
+                                        // Match badge overlay
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(10.dp)
+                                                .clip(RoundedCornerShape(50))
+                                                .background(matchColor)
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                "$matchPct% match",
+                                                color = CityTheme.White,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 11.sp
+                                            )
+                                        }
                                     }
-                                    Text(stringResource(R.string.location_label) + ": ${item.location}", style = MaterialTheme.typography.bodyMedium)
-                                    Text(item.description, style = MaterialTheme.typography.bodySmall)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    if (item.userId.isNotBlank()) {
-                                        // Police Station Mode: No direct messaging
-                                        Button(onClick = {
-                                            navController.navigate("found_item_detail/${item.id}?lostItemId=$savedLostItemId")
-                                        }, modifier = Modifier.fillMaxWidth()) {
-                                            Text(stringResource(R.string.view_details_claim_button))
+                                    // Card details
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Text(
+                                            item.name,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = CityTheme.Brown
+                                        )
+                                        if (item.category.isNotBlank()) {
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                item.category,
+                                                fontSize = 11.sp,
+                                                color = CityTheme.Green,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                        if (item.location.isNotBlank()) {
+                                            Spacer(Modifier.height(4.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Default.LocationOn,
+                                                    null,
+                                                    tint = CityTheme.Brown.copy(0.5f),
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Spacer(Modifier.width(3.dp))
+                                                Text(
+                                                    item.location,
+                                                    fontSize = 12.sp,
+                                                    color = CityTheme.Brown.copy(0.55f),
+                                                    maxLines = 1,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                        if (item.description.isNotBlank()) {
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(
+                                                item.description,
+                                                fontSize = 12.sp,
+                                                color = CityTheme.Brown.copy(0.6f),
+                                                maxLines = 2,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Spacer(Modifier.height(12.dp))
+                                        Button(
+                                            onClick = {
+                                                showMatchesDialog = false
+                                                navController.navigate("found_item_detail/${item.id}?lostItemId=$savedLostItemId")
+                                            },
+                                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                                        ) {
+                                            Text("View & Claim", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                         }
                                     }
                                 }
                             }
                         }
                     }
+
+                    // Footer buttons
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CityTheme.White)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                showMatchesDialog = false
+                                navController.navigate("home") { popUpTo("home") { inclusive = true } }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CityTheme.Brown)
+                        ) {
+                            Text("None of These Are Mine", fontWeight = FontWeight.Medium)
+                        }
+                    }
                 }
-            },
-            confirmButton = { TextButton(onClick = { 
-                showMatchesDialog = false
-                navController.navigate("home") { popUpTo("home") { inclusive = true } }
-            }) { Text(stringResource(R.string.none_of_these_mine_button)) } },
-            dismissButton = { TextButton(onClick = { 
-                showMatchesDialog = false
-                navController.navigate("home") { popUpTo("home") { inclusive = true } }
-            }) { Text("Close") } }
-        )
+            }
+        }
     }
 
     if (showNoImageWarning) {
@@ -476,7 +659,21 @@ fun ReportLostItemScreen(navController: NavController) {
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
+                        // Photo tips
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = CityTheme.Green.copy(alpha = 0.07f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("📸 Tips for better matching:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CityTheme.Green)
+                                Text("• Place item on a flat, plain surface", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                                Text("• Use good lighting — avoid dark/blurry shots", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                                Text("• Capture the whole item, close-up & centered", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
                                 onClick = {
@@ -518,7 +715,20 @@ fun ReportLostItemScreen(navController: NavController) {
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text(stringResource(R.string.item_name_label)) }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = itemName,
+                            onValueChange = { itemName = it },
+                            label = { Text(stringResource(R.string.item_name_label)) },
+                            supportingText = { Text("Be specific, e.g. \"Black Samsung Galaxy A54\" not just \"Phone\"", fontSize = 11.sp, color = CityTheme.Brown.copy(0.5f)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CityTheme.Green,
+                                unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                focusedLabelColor = CityTheme.Green,
+                                cursorColor = CityTheme.Green
+                            )
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         // Category
@@ -533,7 +743,14 @@ fun ReportLostItemScreen(navController: NavController) {
                                 readOnly = true,
                                 label = { Text(stringResource(R.string.category_label)) },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
-                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CityTheme.Green,
+                                    unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                    focusedLabelColor = CityTheme.Green,
+                                    cursorColor = CityTheme.Green
+                                )
                             )
                             ExposedDropdownMenu(
                                 expanded = expandedCategory,
@@ -552,15 +769,30 @@ fun ReportLostItemScreen(navController: NavController) {
                             label = { Text(stringResource(R.string.date_lost_label)) },
                             modifier = Modifier.fillMaxWidth(),
                             readOnly = true,
-                            trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.DateRange, null) } }
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CityTheme.Green,
+                                unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                focusedLabelColor = CityTheme.Green,
+                                cursorColor = CityTheme.Green
+                            ),
+                            trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.DateRange, null, tint = CityTheme.Green) } }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
                             value = description,
                             onValueChange = { description = it },
                             label = { Text(stringResource(R.string.description_label)) },
+                            placeholder = { Text("Stickers, color, brand, size, distinguishing marks, contents…", fontSize = 12.sp, color = CityTheme.Brown.copy(0.4f)) },
                             modifier = Modifier.fillMaxWidth(),
-                            minLines = 3
+                            minLines = 3,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CityTheme.Green,
+                                unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                focusedLabelColor = CityTheme.Green,
+                                cursorColor = CityTheme.Green
+                            )
                         )
                     }
                 }
@@ -586,7 +818,14 @@ fun ReportLostItemScreen(navController: NavController) {
                                 value = location,
                                 onValueChange = { location = it },
                                 label = { Text(stringResource(R.string.location_label)) },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CityTheme.Green,
+                                    unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                    focusedLabelColor = CityTheme.Green,
+                                    cursorColor = CityTheme.Green
+                                )
                             )
                             IconButton(onClick = {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -656,21 +895,7 @@ fun ReportLostItemScreen(navController: NavController) {
 
             // SUBMIT
             item {
-                if (isCheckingMatches) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(CityTheme.Brown)
-                            .padding(16.dp)
-                    ) {
-                        CircularProgressIndicator(color = CityTheme.Gold)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Smart AI Scanning...", color = CityTheme.White, fontWeight = FontWeight.Bold)
-                        Text("Looking for visual and keyword matches", fontSize = 12.sp, color = CityTheme.White.copy(alpha = 0.7f))
-                    }
-                } else if (isSubmitting) {
+                if (isSubmitting && !isCheckingMatches) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         CircularProgressIndicator(color = CityTheme.Green)
                         Spacer(Modifier.height(8.dp))
@@ -681,6 +906,8 @@ fun ReportLostItemScreen(navController: NavController) {
                         onClick = {
                             if (itemName.isBlank()) {
                                 Toast.makeText(context, "Please enter an item name", Toast.LENGTH_SHORT).show()
+                            } else if (category.isBlank()) {
+                                Toast.makeText(context, "Please select a category — it helps us find a match", Toast.LENGTH_LONG).show()
                             } else if (selectedImageUri == null) {
                                 showNoImageWarning = true
                             } else {

@@ -9,6 +9,8 @@ data class ClaimNotification(
     val itemId: String = "",
     val itemName: String = "",     // For display
     val status: String = "",        // APPROVED or REJECTED
-    val isRead: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isRead")
+    @set:com.google.firebase.firestore.PropertyName("isRead")
+    var isRead: Boolean = false,
     val timestamp: Date = Date()
 )

@@ -12,5 +12,7 @@ data class Message(
     val timestamp: Date = Date(),
     val itemId: String = "", // Optional: Link chat to a specific item context
     val imageUrl: String = "", // For sending photos in chat
-    val isRead: Boolean = false
+    @get:com.google.firebase.firestore.PropertyName("isRead")
+    @set:com.google.firebase.firestore.PropertyName("isRead")
+    var isRead: Boolean = false
 )

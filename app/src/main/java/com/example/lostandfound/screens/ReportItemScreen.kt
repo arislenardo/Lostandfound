@@ -302,52 +302,6 @@ fun ReportItemScreen(navController: NavController) {
     }
 
     // --- POPUPS & DIALOGS ---
-    if (showOwnerDialog) {
-        AlertDialog(
-            onDismissRequest = { showOwnerDialog = false },
-            title = { Text("Potential Owner Found!") },
-            text = {
-                Column {
-                    Text("This item looks similar to something reported lost. Is it one of these?")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.height(250.dp)) {
-                        items(potentialOwners) { (item, score) ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = CityTheme.Cream),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(item.name, style = MaterialTheme.typography.titleMedium)
-                                        Text(
-                                            text = "${(score * 100).toInt()}% Match",
-                                            color = CityTheme.Gold,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                    }
-                                    Text("Category: ${item.category}", style = MaterialTheme.typography.bodyMedium)
-                                    Text(item.description, style = MaterialTheme.typography.bodySmall)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    if (item.userId.isNotBlank()) {
-                                        // Police Station Mode: No direct messaging
-                                        Text(
-                                            "Match Detected. Submit report for officer verification.",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.tertiary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showOwnerDialog = false; finalizeReportUpload() }) { Text("Continue to Submit") } },
-            dismissButton = { TextButton(onClick = { showOwnerDialog = false }) { Text("Cancel") } }
-        )
-    }
 
     if (showSurrenderDialog) {
         AlertDialog(
@@ -490,7 +444,21 @@ fun ReportItemScreen(navController: NavController) {
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
+                        // Photo tips
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = CityTheme.Green.copy(alpha = 0.07f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("📸 Tips for better matching:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CityTheme.Green)
+                                Text("• Place item on a flat, plain surface", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                                Text("• Use good lighting — avoid dark/blurry shots", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                                Text("• Capture the whole item, close-up & centered", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
                                 onClick = {
@@ -532,7 +500,20 @@ fun ReportItemScreen(navController: NavController) {
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        OutlinedTextField(value = itemName, onValueChange = { itemName = it }, label = { Text("What is it?") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = itemName,
+                            onValueChange = { itemName = it },
+                            label = { Text("What is it?") },
+                            supportingText = { Text("Be specific, e.g. \"Black Samsung Galaxy A54\" not just \"Phone\"", fontSize = 11.sp, color = CityTheme.Brown.copy(0.5f)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CityTheme.Green,
+                                unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                focusedLabelColor = CityTheme.Green,
+                                cursorColor = CityTheme.Green
+                            )
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         // Category
@@ -547,7 +528,14 @@ fun ReportItemScreen(navController: NavController) {
                                 readOnly = true,
                                 label = { Text("Category") },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
-                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CityTheme.Green,
+                                    unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                    focusedLabelColor = CityTheme.Green,
+                                    cursorColor = CityTheme.Green
+                                )
                             )
                             ExposedDropdownMenu(
                                 expanded = expandedCategory,
@@ -566,15 +554,30 @@ fun ReportItemScreen(navController: NavController) {
                             label = { Text("Date Found") },
                             modifier = Modifier.fillMaxWidth(),
                             readOnly = true,
-                            trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.DateRange, null) } }
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CityTheme.Green,
+                                unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                focusedLabelColor = CityTheme.Green,
+                                cursorColor = CityTheme.Green
+                            ),
+                            trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.DateRange, null, tint = CityTheme.Green) } }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
                             value = description,
                             onValueChange = { description = it },
-                            label = { Text("Description (Color, Brand, etc.)") },
+                            label = { Text("Additional Details (optional)") },
+                            placeholder = { Text("Stickers, color, brand, size, distinguishing marks, contents…", fontSize = 12.sp, color = CityTheme.Brown.copy(0.4f)) },
                             modifier = Modifier.fillMaxWidth(),
-                            minLines = 3
+                            minLines = 3,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CityTheme.Green,
+                                unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                focusedLabelColor = CityTheme.Green,
+                                cursorColor = CityTheme.Green
+                            )
                         )
                     }
                 }
@@ -599,8 +602,15 @@ fun ReportItemScreen(navController: NavController) {
                             OutlinedTextField(
                                 value = location,
                                 onValueChange = { location = it },
-                                label = { Text("Where was it found?") },
-                                modifier = Modifier.weight(1f)
+                                label = { Text("Location where found") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CityTheme.Green,
+                                    unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.3f),
+                                    focusedLabelColor = CityTheme.Green,
+                                    cursorColor = CityTheme.Green
+                                )
                             )
                             IconButton(onClick = {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -670,21 +680,7 @@ fun ReportItemScreen(navController: NavController) {
 
             // SUBMIT BUTTON
             item {
-                if (isCheckingMatches) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(CityTheme.Brown)
-                            .padding(16.dp)
-                    ) {
-                        CircularProgressIndicator(color = CityTheme.Gold)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Smart AI Scanning...", color = CityTheme.White, fontWeight = FontWeight.Bold)
-                        Text("Looking for visual and keyword matches", fontSize = 12.sp, color = CityTheme.White.copy(alpha = 0.7f))
-                    }
-                } else if (isSubmitting) {
+                if (isSubmitting || isCheckingMatches) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         CircularProgressIndicator(color = CityTheme.Green)
                         Spacer(Modifier.height(8.dp))
@@ -694,7 +690,9 @@ fun ReportItemScreen(navController: NavController) {
                     Button(
                         onClick = {
                             if (itemName.isBlank() || location.isBlank()) {
-                                Toast.makeText(context, "Please fill required fields", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Please fill in the item name and location", Toast.LENGTH_SHORT).show()
+                            } else if (category.isBlank()) {
+                                Toast.makeText(context, "Please select a category — it helps us find a match", Toast.LENGTH_LONG).show()
                             } else {
                                     coroutineScope.launch {
                                         isCheckingMatches = true
@@ -706,8 +704,8 @@ fun ReportItemScreen(navController: NavController) {
                                             coroutineScope.launch {
                                                 val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
                                                 isCheckingMatches = false
-                                                if (matches.isNotEmpty()) { potentialOwners = matches; showOwnerDialog = true }
-                                                else { finalizeReportUpload() }
+                                                if (matches.isNotEmpty()) { potentialOwners = matches }
+                                                finalizeReportUpload()
                                             }
                                         }.addOnFailureListener { isCheckingMatches = false; finalizeReportUpload() }
                                     }

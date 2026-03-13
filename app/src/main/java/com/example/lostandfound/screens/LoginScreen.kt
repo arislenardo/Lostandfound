@@ -45,6 +45,38 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
+import com.google.firebase.messaging.FirebaseMessaging
+import android.util.Log
+
+// ── Shared Helper to ensure FCM token is saved before navigating ────────────
+private fun syncFCMTokenAndNavigate(
+    auth: FirebaseAuth,
+    navController: NavController,
+    onComplete: () -> Unit
+) {
+    auth.currentUser?.let { user ->
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val token = task.result
+                FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                    .update("fcmToken", token)
+                    .addOnCompleteListener {
+                        Log.d("Login", "FCM token synced during login")
+                        onComplete()
+                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                    }
+            } else {
+                Log.e("Login", "Failed to get FCM token during login", task.exception)
+                // Fallback: still navigate
+                onComplete()
+                navController.navigate("home") { popUpTo("login") { inclusive = true } }
+            }
+        }
+    } ?: run {
+        onComplete()
+        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+    }
+}
 
 // ── City Color Palette ──────────────────────────────────────────────────────
 private val CityGreen      = Color(0xFF2D6A4F)   // Deep forest green
@@ -120,8 +152,7 @@ fun LoginScreen(navController: NavController) {
                                     .await()
                             }
                             AuthManager.refreshAdminStatus()
-                            isLoading = false
-                            navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                            syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                         }
                     }
                     .addOnFailureListener { e ->
@@ -449,6 +480,8 @@ fun LoginScreen(navController: NavController) {
                                 if (isProfileSetupStep) {
                                     if (profileName.isBlank()) {
                                         isLoading = false; errorMessage = "Please enter your name."; isErrorVisible = true
+                                    } else if (profileEmail.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(profileEmail).matches()) {
+                                        isLoading = false; errorMessage = "Please enter a valid email address."; isErrorVisible = true
                                     } else {
                                         scope.launch {
                                             try {
@@ -466,8 +499,7 @@ fun LoginScreen(navController: NavController) {
                                                     .collection("users").document(user.uid)
                                                     .set(userData).await()
                                                 AuthManager.refreshAdminStatus()
-                                                isLoading = false
-                                                navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                             } catch (e: Exception) {
                                                 isLoading = false; errorMessage = "Failed to save profile: ${e.localizedMessage}"; isErrorVisible = true
                                             }
@@ -494,8 +526,7 @@ fun LoginScreen(navController: NavController) {
                                                                 .await()
                                                         }
                                                         AuthManager.refreshAdminStatus()
-                                                        isLoading = false
-                                                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                        syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                                     }
                                                 }
                                             }
@@ -523,8 +554,7 @@ fun LoginScreen(navController: NavController) {
                                                                 .await()
                                                         }
                                                         AuthManager.refreshAdminStatus()
-                                                        isLoading = false
-                                                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                        syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                                     }
                                                 }
                                                 .addOnFailureListener { e ->
@@ -554,8 +584,7 @@ fun LoginScreen(navController: NavController) {
                                                                         .await()
                                                                 }
                                                                 AuthManager.refreshAdminStatus()
-                                                                isLoading = false
-                                                                navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                                syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                                             }
                                                         }
                                                     }

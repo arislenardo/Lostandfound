@@ -26,7 +26,7 @@
     <!-- Report Lost Item Screen -->
     <string name="report_lost_item_title">Report Lost Item</string>
     <string name="item_name_label">Item Name</string>
-    <string name="description_label">Description</string>
+    <string name="description_label">Additional Details (optional)</string>
     <string name="location_label">Location</string>
     <string name="category_label">Category</string>
     <string name="date_lost_label">Date Lost</string>

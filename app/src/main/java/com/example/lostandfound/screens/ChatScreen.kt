@@ -78,11 +78,14 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                 }
                 messages = filtered
                 
-                // Mark incoming messages as read
-                filtered.forEach { msg ->
-                    if (msg.receiverId == currentUserId && !msg.isRead) {
-                        db.collection("messages").document(msg.id).update("isRead", true)
+                // Mark incoming messages as read in batch
+                val unread = filtered.filter { it.receiverId == currentUserId && it.isRead != true }
+                if (unread.isNotEmpty()) {
+                    val batch = db.batch()
+                    unread.forEach { msg ->
+                        batch.update(db.collection("messages").document(msg.id), "isRead", true)
                     }
+                    batch.commit()
                 }
             }
         }
@@ -206,6 +209,7 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                                                         imageUrl = url,
                                                         timestamp = Date()
                                                     )
+
                                                     ChatManager.sendMessage(msg,
                                                         onSuccess = { 
                                                             newMessageText = ""

@@ -72,10 +72,14 @@ class HomeViewModel : ViewModel() {
 
         msgListener = db.collection("messages")
             .whereEqualTo("receiverId", userId)
-            .whereEqualTo("isRead", false)
             .addSnapshotListener { snap, _ ->
-                val unread = snap?.size() ?: 0
-                updateCounts(unreadMessages = unread)
+                // Count unread threads (one card per sender), same logic as the inbox
+                val unreadThreads = snap?.documents
+                    ?.mapNotNull { it.getString("senderId") to (it.getBoolean("isRead") != true) }
+                    ?.groupBy { it.first }
+                    ?.count { (_, msgs) -> msgs.any { it.second } }
+                    ?: 0
+                updateCounts(unreadMessages = unreadThreads)
             }
 
         matchListener = db.collection("match_notifications")
@@ -88,9 +92,11 @@ class HomeViewModel : ViewModel() {
 
         claimNotifListener = db.collection("claim_notifications")
             .whereEqualTo("userId", userId)
-            .whereEqualTo("isRead", false)
             .addSnapshotListener { snap, _ ->
-                val unread = snap?.size() ?: 0
+                // Count docs where isRead is false OR missing (same as inbox filter)
+                val unread = snap?.documents?.count { doc ->
+                    doc.getBoolean("isRead") != true
+                } ?: 0
                 updateCounts(unreadClaimUpdates = unread)
             }
 
@@ -113,7 +119,12 @@ class HomeViewModel : ViewModel() {
         val newUnreadMatches = unreadMatches ?: current.unreadMatches
         val newPendingClaims = pendingClaims ?: current.pendingClaims
         val newUnreadClaimUpdates = unreadClaimUpdates ?: current.unreadClaimUpdates
-        val total = newUnreadMessages + newUnreadMatches + newPendingClaims + newUnreadClaimUpdates
+        
+        // Include pending claims in the total notification count ONLY for admins.
+        // This ensures the top notification bell shows a badge for new claims.
+        val total = newUnreadMessages + newUnreadMatches + newUnreadClaimUpdates + 
+                   (if (current.isAdmin) newPendingClaims else 0)
+                   
         uiState.value = current.copy(
             unreadMessages = newUnreadMessages,
             unreadMatches = newUnreadMatches,

@@ -14,6 +14,15 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.example.lostandfound.screens.*
 import com.example.lostandfound.data.AuthManager
+import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
+import com.google.android.gms.tasks.Task
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.*
@@ -38,8 +47,23 @@ import com.example.lostandfound.ui.theme.LocalThemeConfig
 import com.example.lostandfound.ui.theme.LostandfoundTheme
 
 class MainActivity : ComponentActivity() {
+    
+    // Permission launcher for Android 13+ Push Notifications
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d("FCM", "Notification permission granted")
+        } else {
+            Log.w("FCM", "Notification permission completely denied")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        askNotificationPermission()
+
         setContent {
             var isDark by remember { mutableStateOf(false) } // Default to Light for now
             // Dynamic color removed as per request
@@ -58,6 +82,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun askNotificationPermission() {
+        // This is only necessary for API level >= 33 (TIRAMISU)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                // FCM SDK (and your app) can post notifications.
+            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                // TODO: display an educational UI explaining to the user the features that will be enabled
+                //       by them granting the POST_NOTIFICATION permission. This UI should provide the user
+                //       "OK" and "No thanks" buttons. If the user selects "OK," directly request the permission.
+                //       If the user selects "No thanks," allow the user to continue without notifications.
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                // Directly ask for the permission
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 }
 
 // --- NAVIGATION CONTROLLER ---
@@ -72,8 +116,22 @@ fun LostAndFoundApp() {
     var showNonResidentNotice by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(auth.currentUser) {
         AuthManager.fetchAdminUids()
+        
+        // Sync FCM Token
+        auth.currentUser?.let { user ->
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { task: Task<String> ->
+                if (task.isSuccessful) {
+                    val token = task.result
+                    val db = FirebaseFirestore.getInstance()
+                    db.collection("users").document(user.uid)
+                        .update("fcmToken", token)
+                        .addOnSuccessListener { _ -> Log.d("FCM", "Token synced for user ${user.uid}") }
+                        .addOnFailureListener { e: Exception -> Log.w("FCM", "Failed to sync token", e) }
+                }
+            }
+        }
     }
 
     if (showResidencyPrompt) {
@@ -230,9 +288,6 @@ fun LostAndFoundApp() {
         }
         composable("history") {
             HistoryScreen(navController = navController)
-        }
-        composable("admin_maintenance") {
-            AdminMaintenanceScreen(navController = navController)
         }
     }
 }

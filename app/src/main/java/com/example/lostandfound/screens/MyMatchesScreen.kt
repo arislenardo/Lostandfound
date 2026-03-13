@@ -9,19 +9,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.MatchNotification
 import com.example.lostandfound.model.MatchNotificationStatus
@@ -41,7 +46,7 @@ fun MyMatchesScreen(navController: NavController) {
 
     DisposableEffect(currentUserId) {
         if (currentUserId == null) return@DisposableEffect onDispose { }
-        
+
         val listener = db.collection("match_notifications")
             .whereEqualTo("lostItemOwnerId", currentUserId)
             .addSnapshotListener { result, e ->
@@ -91,19 +96,27 @@ fun MyMatchesScreen(navController: NavController) {
                 Modifier.fillMaxSize().padding(paddingValues).padding(24.dp), Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Search, null, Modifier.size(64.dp), tint = CityTheme.Green.copy(0.3f))
-                    Spacer(Modifier.height(16.dp))
-                    Text("No matches found yet", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = CityTheme.Brown)
+                    Box(
+                        modifier = Modifier
+                            .size(90.dp)
+                            .clip(CircleShape)
+                            .background(CityTheme.Green.copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Search, null, Modifier.size(44.dp), tint = CityTheme.Green.copy(0.4f))
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text("No Matches Yet", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = CityTheme.Brown)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "When someone finds an item matching your lost report, it will appear here.",
+                        "When our AI finds an item that matches your lost report, it will appear here.",
                         fontSize = 13.sp, color = CityTheme.Brown.copy(alpha = 0.5f), textAlign = TextAlign.Center
                     )
                 }
             }
             else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(notifications) { notification ->
                     CityMatchNotificationCard(
@@ -118,14 +131,15 @@ fun MyMatchesScreen(navController: NavController) {
                         }
                     )
                 }
+                item { Spacer(Modifier.height(12.dp)) }
             }
         }
 
         if (showDismissConfirm && selectedNotification != null) {
             AlertDialog(
                 onDismissRequest = { showDismissConfirm = false },
-                title = { Text("Dismiss Match?", fontWeight = FontWeight.Bold) },
-                text = { Text("Are you sure you want to dismiss this match for '${selectedNotification!!.foundItemName}'? You won't see it again in your matches.") },
+                title = { Text("Dismiss Match?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+                text = { Text("Are you sure you want to dismiss the match for '${selectedNotification!!.foundItemName}'? You won't see it again.", color = CityTheme.Brown.copy(alpha = 0.7f)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -136,13 +150,15 @@ fun MyMatchesScreen(navController: NavController) {
                                 }
                             showDismissConfirm = false
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        shape = RoundedCornerShape(10.dp)
                     ) { Text("Dismiss") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDismissConfirm = false }) { Text("Cancel", color = CityTheme.Brown) }
                 },
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(20.dp),
+                containerColor = CityTheme.White
             )
         }
     }
@@ -154,6 +170,7 @@ fun CityMatchNotificationCard(
     onViewDetails: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val isUnread = notification.status == MatchNotificationStatus.UNREAD
     val matchPct = (notification.matchScore * 100).toInt()
     val matchColor = when {
@@ -164,67 +181,178 @@ fun CityMatchNotificationCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isUnread) CityTheme.White else androidx.compose.ui.graphics.Color.Transparent
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CityTheme.White),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isUnread) 5.dp else 2.dp
+        )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (isUnread) {
+        Column {
+            // Image area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            ) {
+                if (notification.foundItemImageUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(notification.foundItemImageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = notification.foundItemName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(CityTheme.Cream, CityTheme.Cream.copy(alpha = 0.6f))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("📦", fontSize = 48.sp)
+                    }
+                }
+
+                // Gradient overlay at bottom
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(CityTheme.Gold)
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    androidx.compose.ui.graphics.Color.Transparent,
+                                    CityTheme.White.copy(alpha = 0.9f)
+                                )
+                            )
+                        )
                 )
-                Spacer(Modifier.width(12.dp))
+
+                // Match score badge
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(matchColor)
+                        .padding(horizontal = 12.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        "$matchPct%",
+                        color = CityTheme.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 13.sp
+                    )
+                }
+
+                // Unread indicator dot
+                if (isUnread) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(10.dp)
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(CityTheme.Gold)
+                    )
+                }
             }
-            Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    if (isUnread) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.NewReleases, contentDescription = "New Match", tint = CityTheme.Gold, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("NEW MATCH", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CityTheme.Gold)
-                        }
-                        Spacer(Modifier.height(4.dp))
+
+            // Card body
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            notification.foundItemName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = CityTheme.Brown,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Matches your lost: ${notification.lostItemName}",
+                            fontSize = 12.sp,
+                            color = CityTheme.Brown.copy(alpha = 0.55f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text("Found: ${notification.foundItemName}", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.Brown)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("$matchPct%", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = matchColor)
-                    Text("match", fontSize = 10.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
-                }
-            }
-
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Matches your lost: ${notification.lostItemName}",
-                fontSize = 13.sp, color = CityTheme.Brown.copy(alpha = 0.6f)
-            )
-
-            Spacer(Modifier.height(14.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onViewDetails,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                    // Dismiss icon
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
                     ) {
-                        Text("View Details to Claim", fontSize = 13.sp)
+                        Icon(
+                            Icons.Default.Close,
+                            "Dismiss",
+                            tint = CityTheme.Brown.copy(alpha = 0.3f),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Close, "Dismiss", tint = CityTheme.Brown.copy(alpha = 0.4f))
+                }
+
+                // Location if available
+                if (notification.foundItemLocation.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.LocationOn,
+                            null,
+                            tint = CityTheme.Green.copy(0.7f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            notification.foundItemLocation,
+                            fontSize = 12.sp,
+                            color = CityTheme.Brown.copy(0.5f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
+                }
+
+                // Match label
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(matchColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            "$matchPct% AI match confidence",
+                            fontSize = 11.sp,
+                            color = matchColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Button(
+                    onClick = onViewDetails,
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                ) {
+                    Text("View Details & Claim", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
         }

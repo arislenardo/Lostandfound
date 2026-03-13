@@ -283,11 +283,26 @@ fun ProfileScreen(navController: NavController) {
                         confirmButton = {
                             Button(
                                 onClick = {
-                                    auth.signOut()
-                                    navController.navigate("login") {
-                                        popUpTo("home") { inclusive = true }
+                                    val user = auth.currentUser
+                                    if (user != null) {
+                                        db.collection("users").document(user.uid)
+                                            .update("fcmToken", "")
+                                            .addOnCompleteListener {
+                                                auth.signOut()
+                                                navController.navigate("login") {
+                                                    popUpTo(0) { inclusive = true }
+                                                    launchSingleTop = true
+                                                }
+                                                showSignOutConfirm = false
+                                            }
+                                    } else {
+                                        auth.signOut()
+                                        navController.navigate("login") {
+                                            popUpTo(0) { inclusive = true }
+                                            launchSingleTop = true
+                                        }
+                                        showSignOutConfirm = false
                                     }
-                                    showSignOutConfirm = false
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
                             ) { Text("Log Out") }
