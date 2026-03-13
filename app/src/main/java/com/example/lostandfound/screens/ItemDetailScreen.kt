@@ -234,12 +234,14 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                     }
                 } else {
                     val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    val dateTimeFormat = java.text.SimpleDateFormat("MMM dd, yyyy hh:mm a", java.util.Locale.getDefault())
 
                     // Info card
                     CityDetailCard(title = "ITEM REPORT") {
                         DetailRow("Item Name", item!!.name)
                         DetailRow("Category", item!!.category)
                         DetailRow("Date Lost", try { dateFormat.format(item!!.dateLost) } catch (e: Exception) { "Unknown" })
+                        DetailRow("Reported At", try { item!!.createdAt?.let { dateTimeFormat.format(it) } ?: "N/A" } catch (e: Exception) { "Unknown" })
                     }
 
                     // Location & description

@@ -120,32 +120,30 @@ fun MyItemsScreen(navController: NavController) {
         Column(
             modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            if (isAdmin) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Search by name or location…") },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = CityTheme.Green) },
-                    trailingIcon = {
-                        IconButton(onClick = { showDatePicker = true }) {
-                            Icon(
-                                Icons.Default.DateRange,
-                                contentDescription = "Filter by date",
-                                tint = if (filterDateMillis != null) CityTheme.Gold else CityTheme.Green
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CityTheme.Green,
-                        unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.25f),
-                        focusedLabelColor = CityTheme.Green,
-                        cursorColor = CityTheme.Green
-                    )
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Search by name or location…") },
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = CityTheme.Green) },
+                trailingIcon = {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(
+                            Icons.Default.DateRange,
+                            contentDescription = "Filter by date",
+                            tint = if (filterDateMillis != null) CityTheme.Gold else CityTheme.Green
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CityTheme.Green,
+                    unfocusedBorderColor = CityTheme.Brown.copy(alpha = 0.25f),
+                    focusedLabelColor = CityTheme.Green,
+                    cursorColor = CityTheme.Green
                 )
-            }
+            )
 
             if (showDatePicker) {
                 val datePickerState = rememberDatePickerState(initialSelectedDateMillis = filterDateMillis)
@@ -173,7 +171,7 @@ fun MyItemsScreen(navController: NavController) {
                 val end = minOf((safePage + 1) * 10, filteredItems.size)
                 Text(
                     "Showing $start–$end of ${filteredItems.size} results",
-                    fontSize = 11.sp, color = CityTheme.Brown.copy(alpha = 0.5f),
+                    fontSize = 11.sp, color = CityTheme.Brown.copy(0.4f),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -269,10 +267,10 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
             } else {
                 Box(
                     modifier = Modifier.size(68.dp).clip(RoundedCornerShape(10.dp))
-                        .background(CityTheme.Green.copy(alpha = 0.1f)),
+                        .background(CityTheme.Green.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("?", fontSize = 28.sp, color = CityTheme.Green.copy(alpha = 0.4f))
+                    Text("?", fontSize = 28.sp, color = CityTheme.Green.copy(alpha = 0.5f))
                 }
             }
             Spacer(Modifier.width(14.dp))

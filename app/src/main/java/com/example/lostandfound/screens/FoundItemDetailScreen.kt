@@ -279,11 +279,13 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                     }
                 } else {
                     val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    val dateTimeFormat = java.text.SimpleDateFormat("MMM dd, yyyy hh:mm a", java.util.Locale.getDefault())
 
                     CityDetailCard("ITEM INFORMATION") {
                         DetailRowLabel("Item Name", item!!.name)
                         DetailRowLabel("Category", item!!.category)
                         DetailRowLabel("Date Found", try { dateFormat.format(item!!.dateFound) } catch (e: Exception) { "Unknown" })
+                        DetailRowLabel("Reported At", try { item!!.createdAt?.let { dateTimeFormat.format(it) } ?: "N/A" } catch (e: Exception) { "Unknown" })
                     }
                     CityDetailCard("DETAILS & LOCATION") {
                         DetailRowLabel("Location", item!!.location)

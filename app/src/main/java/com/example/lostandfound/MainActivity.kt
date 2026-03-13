@@ -112,12 +112,15 @@ fun LostAndFoundApp() {
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
-    var showResidencyPrompt by rememberSaveable { mutableStateOf(true) }
+    var showResidencyPrompt by rememberSaveable { mutableStateOf(auth.currentUser == null) }
     var showNonResidentNotice by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(auth.currentUser) {
         AuthManager.fetchAdminUids()
+        if (auth.currentUser != null) {
+            showResidencyPrompt = false
+        }
         
         // Sync FCM Token
         auth.currentUser?.let { user ->
