@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -215,6 +216,9 @@ private fun CategoryItemsList(
     var activeTab by remember { mutableStateOf(0) } // 0=Found, 1=Lost
     var filterDateMillis by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var currentPage by remember { mutableStateOf(0) }
+
+    LaunchedEffect(category, activeTab, filterDateMillis) { currentPage = 0 }
 
     val filteredFoundItems = remember(foundItems, filterDateMillis) {
         if (filterDateMillis != null) {
@@ -336,20 +340,36 @@ private fun CategoryItemsList(
             }
             activeTab == 0 && filteredFoundItems.isEmpty() -> EmptyCategoryPlaceholder(if (filterDateMillis != null) "No found items on selected date" else "No found items in this category")
             activeTab == 1 && filteredLostItems.isEmpty()  -> EmptyCategoryPlaceholder(if (filterDateMillis != null) "No lost items on selected date" else "No lost items in this category")
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (activeTab == 0) {
-                    items(filteredFoundItems) { item ->
-                        FoundItemCard(item = item, navController = navController, isAdmin = true)
+            else -> {
+                val currentItemsSize = if (activeTab == 0) filteredFoundItems.size else filteredLostItems.size
+                val totalPages = maxOf(1, (currentItemsSize + 9) / 10)
+                val safePage = currentPage.coerceIn(0, totalPages - 1)
+                
+                val listState = rememberLazyListState()
+                
+                LaunchedEffect(safePage, activeTab) { listState.scrollToItem(0) }
+
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (activeTab == 0) {
+                            val pageFoundItems = filteredFoundItems.drop(safePage * 10).take(10)
+                            items(pageFoundItems) { item ->
+                                FoundItemCard(item = item, navController = navController, isAdmin = true)
+                            }
+                        } else {
+                            val pageLostItems = filteredLostItems.drop(safePage * 10).take(10)
+                            items(pageLostItems) { item ->
+                                LostItemCard(item = item, navController = navController, isAdmin = true, onFound = {})
+                            }
+                        }
+                        item { Spacer(Modifier.height(16.dp)) }
                     }
-                } else {
-                    items(filteredLostItems) { item ->
-                        LostItemCard(item = item, navController = navController, isAdmin = true, onFound = {})
-                    }
+                    PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
                 }
-                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }

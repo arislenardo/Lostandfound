@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,6 +43,7 @@ fun AdminClaimsScreen(navController: NavController) {
     var showConfirmDialog by remember { mutableStateOf(false) }
     var selectedClaim by remember { mutableStateOf<Claim?>(null) }
     var pendingStatus by remember { mutableStateOf("") }
+    var currentPage by remember { mutableStateOf(0) }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -145,28 +147,41 @@ fun AdminClaimsScreen(navController: NavController) {
                     Text("No pending claims to review.", fontSize = 13.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
                 }
             }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(claims) { claim ->
-                    CityClaimReviewCard(
-                        claim = claim,
-                        onApprove = { 
-                            selectedClaim = claim
-                            pendingStatus = ClaimStatus.APPROVED
-                            showConfirmDialog = true
-                        },
-                        onReject = { 
-                            selectedClaim = claim
-                            pendingStatus = ClaimStatus.REJECTED
-                            showConfirmDialog = true
-                        },
-                        onMessage = {
-                            val userName = claim.userEmail.substringBefore("@")
-                            navController.navigate("chat/${claim.userId}/${userName}")
+            else -> {
+                val totalPages = maxOf(1, (claims.size + 9) / 10)
+                val safePage = currentPage.coerceIn(0, totalPages - 1)
+                val pageItems = claims.drop(safePage * 10).take(10)
+                val listState = rememberLazyListState()
+                
+                LaunchedEffect(safePage) { listState.scrollToItem(0) }
+
+                Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(pageItems) { claim ->
+                            CityClaimReviewCard(
+                                claim = claim,
+                                onApprove = { 
+                                    selectedClaim = claim
+                                    pendingStatus = ClaimStatus.APPROVED
+                                    showConfirmDialog = true
+                                },
+                                onReject = { 
+                                    selectedClaim = claim
+                                    pendingStatus = ClaimStatus.REJECTED
+                                    showConfirmDialog = true
+                                },
+                                onMessage = {
+                                    val userName = claim.userEmail.substringBefore("@")
+                                    navController.navigate("chat/${claim.userId}/${userName}")
+                                }
+                            )
                         }
-                    )
+                    }
+                    PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
                 }
             }
         }

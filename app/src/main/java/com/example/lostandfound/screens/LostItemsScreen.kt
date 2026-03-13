@@ -49,11 +49,15 @@ fun LostItemsScreen(navController: NavController) {
     var filterDateMillis by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        db.collection("found_items")
-            .whereEqualTo("status", ItemStatus.FOUND)
-            .limit(500)
-            .get()
+    LaunchedEffect(isAdmin) {
+        var query: Query = db.collection("found_items")
+        
+        // Only filter for "FOUND" if user is NOT admin. Admins see everything.
+        if (!isAdmin) {
+            query = query.whereEqualTo("status", ItemStatus.FOUND)
+        }
+    
+        query.limit(500).get()
             .addOnSuccessListener { result ->
                 allItems = result.documents.mapNotNull { doc -> 
                     doc.toObject(FoundItem::class.java)?.copy(id = doc.id) 
@@ -63,17 +67,38 @@ fun LostItemsScreen(navController: NavController) {
             .addOnFailureListener { isLoading = false }
     }
 
-    val filteredItems = remember(allItems, searchQuery, filterDateMillis) {
-        val searchFiltered = if (searchQuery.isBlank()) allItems
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val statuses = listOf("ALL", "AVAILABLE", "PENDING", "RETURNED")
+    val descriptions = listOf(
+        "Complete inventory of all found items.",
+        "Items currently at the station waiting for a claim.",
+        "Items with ongoing claims or verification in progress.",
+        "Record of items successfully returned to their owners."
+    )
+
+    val filteredItems = remember(allItems, searchQuery, filterDateMillis, selectedTabIndex) {
+        var list = if (searchQuery.isBlank()) allItems
         else allItems.filter { it.name.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true) }
         
         if (filterDateMillis != null) {
             val sdf = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
             val filterStr = sdf.format(java.util.Date(filterDateMillis!!))
-            searchFiltered.filter { sdf.format(it.dateFound) == filterStr }
-        } else {
-            searchFiltered
+            list = list.filter { sdf.format(it.dateFound) == filterStr }
         }
+
+        // Tab Filtering
+        val selectedStatus = statuses[selectedTabIndex]
+        if (selectedStatus != "ALL") {
+            list = list.filter { 
+                when(selectedStatus) {
+                    "AVAILABLE" -> it.status == ItemStatus.FOUND
+                    "PENDING"   -> it.status == ItemStatus.CLAIMED
+                    "RETURNED"  -> it.status == ItemStatus.RETURNED
+                    else -> true
+                }
+            }
+        }
+        list
     }
     LaunchedEffect(searchQuery, filterDateMillis) { currentPage = 0 }
 
@@ -133,6 +158,38 @@ fun LostItemsScreen(navController: NavController) {
                     focusedLabelColor = CityTheme.Green,
                     cursorColor = CityTheme.Green
                 )
+            )
+
+            ScrollableTabRow(
+                selectedTabIndex = selectedTabIndex,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                containerColor = CityTheme.Cream,
+                contentColor = CityTheme.Green,
+                edgePadding = 0.dp,
+                divider = {}
+            ) {
+                statuses.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = {
+                            Text(
+                                title,
+                                fontSize = 12.sp,
+                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selectedTabIndex == index) CityTheme.Green else CityTheme.Brown.copy(alpha = 0.6f)
+                            )
+                        }
+                    )
+                }
+            }
+
+            Text(
+                descriptions[selectedTabIndex],
+                fontSize = 11.sp,
+                color = CityTheme.Brown.copy(alpha = 0.6f),
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
             )
 
             if (showDatePicker) {

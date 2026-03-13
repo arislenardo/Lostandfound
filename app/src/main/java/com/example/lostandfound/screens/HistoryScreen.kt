@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
@@ -30,6 +31,7 @@ fun HistoryScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
     var historyLogs by remember { mutableStateOf<List<AdminAction>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var currentPage by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         db.collection("admin_history")
@@ -91,15 +93,25 @@ fun HistoryScreen(navController: NavController) {
                     Text("Admin actions will appear here.", fontSize = 13.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
                 }
             }
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(historyLogs) { log ->
-                    AdminActionCard(log)
+            else -> {
+                val totalPages = maxOf(1, (historyLogs.size + 9) / 10)
+                val safePage = currentPage.coerceIn(0, totalPages - 1)
+                val pageItems = historyLogs.drop(safePage * 10).take(10)
+                val listState = rememberLazyListState()
+                
+                LaunchedEffect(safePage) { listState.scrollToItem(0) }
+
+                Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(pageItems) { log ->
+                            AdminActionCard(log)
+                        }
+                    }
+                    PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
                 }
             }
         }

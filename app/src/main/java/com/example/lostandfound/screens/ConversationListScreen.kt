@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +38,7 @@ fun ConversationListScreen(navController: NavController) {
 
     var uniqueConversations by remember { mutableStateOf<List<Message>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var currentPage by remember { mutableStateOf(0) }
 
     LaunchedEffect(currentUserId) {
         if (currentUserId.isBlank()) { isLoading = false; return@LaunchedEffect }
@@ -100,12 +102,25 @@ fun ConversationListScreen(navController: NavController) {
                     Text("Messages with officers will appear here.", fontSize = 13.sp, color = CityTheme.Brown.copy(alpha = 0.5f))
                 }
             }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(uniqueConversations) { lastMsg ->
-                    CityConversationItem(lastMsg, currentUserId, navController)
+            else -> {
+                val totalPages = maxOf(1, (uniqueConversations.size + 9) / 10)
+                val safePage = currentPage.coerceIn(0, totalPages - 1)
+                val pageItems = uniqueConversations.drop(safePage * 10).take(10)
+                val listState = rememberLazyListState()
+
+                LaunchedEffect(safePage) { listState.scrollToItem(0) }
+
+                Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(pageItems) { lastMsg ->
+                            CityConversationItem(lastMsg, currentUserId, navController)
+                        }
+                    }
+                    PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
                 }
             }
         }

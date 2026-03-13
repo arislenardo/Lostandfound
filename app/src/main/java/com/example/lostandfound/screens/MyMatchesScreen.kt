@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +44,7 @@ fun MyMatchesScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var showDismissConfirm by remember { mutableStateOf(false) }
     var selectedNotification by remember { mutableStateOf<MatchNotification?>(null) }
+    var currentPage by remember { mutableStateOf(0) }
 
     DisposableEffect(currentUserId) {
         if (currentUserId == null) return@DisposableEffect onDispose { }
@@ -114,24 +116,37 @@ fun MyMatchesScreen(navController: NavController) {
                     )
                 }
             }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(notifications) { notification ->
-                    CityMatchNotificationCard(
-                        notification = notification,
-                        onViewDetails = {
-                            db.collection("match_notifications").document(notification.id).update("status", MatchNotificationStatus.READ)
-                            navController.navigate("found_item_detail/${notification.foundItemId}?lostItemId=${notification.lostItemId}")
-                        },
-                        onDismiss = {
-                            selectedNotification = notification
-                            showDismissConfirm = true
+            else -> {
+                val totalPages = maxOf(1, (notifications.size + 9) / 10)
+                val safePage = currentPage.coerceIn(0, totalPages - 1)
+                val pageItems = notifications.drop(safePage * 10).take(10)
+                val listState = rememberLazyListState()
+
+                LaunchedEffect(safePage) { listState.scrollToItem(0) }
+
+                Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        items(pageItems) { notification ->
+                            CityMatchNotificationCard(
+                                notification = notification,
+                                onViewDetails = {
+                                    db.collection("match_notifications").document(notification.id).update("status", MatchNotificationStatus.READ)
+                                    navController.navigate("found_item_detail/${notification.foundItemId}?lostItemId=${notification.lostItemId}")
+                                },
+                                onDismiss = {
+                                    selectedNotification = notification
+                                    showDismissConfirm = true
+                                }
+                            )
                         }
-                    )
+                        item { Spacer(Modifier.height(12.dp)) }
+                    }
+                    PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
                 }
-                item { Spacer(Modifier.height(12.dp)) }
             }
         }
 
