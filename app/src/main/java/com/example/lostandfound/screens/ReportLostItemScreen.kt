@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -41,8 +42,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+import com.google.android.gms.location.*
+import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -202,28 +203,78 @@ fun ReportLostItemScreen(navController: NavController) {
         }
     }
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+    val locationSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            // User enabled location, try to get it now
             isFetchingLocation = true
             try {
-                val cancellationTokenSource = CancellationTokenSource()
-                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.token)
+                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
                     .addOnSuccessListener { loc ->
                         isFetchingLocation = false
                         if (loc != null) {
                             latitude = loc.latitude
                             longitude = loc.longitude
-                            location = "${loc.latitude}, ${loc.longitude}"
-                            Toast.makeText(context, "Location fetched!", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "Could not get location.", Toast.LENGTH_SHORT).show()
+                            coroutineScope.launch {
+                                location = getReadableAddress(context, loc.latitude, loc.longitude)
+                                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f))
+                            }
                         }
                     }
                     .addOnFailureListener { isFetchingLocation = false }
             } catch (e: SecurityException) { isFetchingLocation = false }
+        } else {
+            Toast.makeText(context, "Location services are required for this feature.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun checkLocationSettingsAndFetch() {
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000).build()
+        val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
+        val client: SettingsClient = LocationServices.getSettingsClient(context)
+        val task = client.checkLocationSettings(builder.build())
+
+        task.addOnSuccessListener {
+            // Settings are satisfied, fetch location
+            isFetchingLocation = true
+            try {
+                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
+                    .addOnSuccessListener { loc ->
+                        isFetchingLocation = false
+                        if (loc != null) {
+                            latitude = loc.latitude
+                            longitude = loc.longitude
+                            coroutineScope.launch {
+                                location = getReadableAddress(context, loc.latitude, loc.longitude)
+                                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f))
+                            }
+                        } else {
+                            Toast.makeText(context, "Could not get location. Try again.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .addOnFailureListener { isFetchingLocation = false }
+            } catch (e: SecurityException) { isFetchingLocation = false }
+        }
+
+        task.addOnFailureListener { exception ->
+            if (exception is ResolvableApiException) {
+                try {
+                    val intentSenderRequest = IntentSenderRequest.Builder(exception.resolution.intentSender).build()
+                    locationSettingsLauncher.launch(intentSenderRequest)
+                } catch (sendEx: Exception) {
+                    // Ignore the error.
+                }
+            }
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+            checkLocationSettingsAndFetch()
         }
     }
 
@@ -829,21 +880,7 @@ fun ReportLostItemScreen(navController: NavController) {
                             )
                             IconButton(onClick = {
                                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                                    isFetchingLocation = true
-                                    fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-                                        .addOnSuccessListener { loc ->
-                                            isFetchingLocation = false
-                                            if (loc != null) {
-                                                latitude = loc.latitude
-                                                longitude = loc.longitude
-                                                coroutineScope.launch {
-                                                    location = getReadableAddress(context, loc.latitude, loc.longitude)
-                                                    cameraPositionState.animate(
-                                                        CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f)
-                                                    )
-                                                }
-                                            }
-                                        }
+                                    checkLocationSettingsAndFetch()
                                 } else {
                                     locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                                 }

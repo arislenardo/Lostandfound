@@ -239,7 +239,7 @@ fun LoginScreen(navController: NavController) {
                 letterSpacing = 0.5.sp
             )
             Text(
-                text = "Official Lost & Found Portal",
+                text = "Official Balik-Calasiao Portal",
                 fontSize = 12.sp,
                 color = CityGoldLight,
                 letterSpacing = 0.8.sp

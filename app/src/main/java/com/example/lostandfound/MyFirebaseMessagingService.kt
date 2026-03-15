@@ -64,7 +64,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
             // Use custom icon if available, else fallback to standard android icon
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title ?: "Lost & Found Notification")
+            .setContentTitle(title ?: "Balik-Calasiao Notification")
             .setContentText(messageBody)
             .setAutoCancel(true)
             .setSound(defaultSoundUri)

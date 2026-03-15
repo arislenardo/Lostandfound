@@ -144,7 +144,7 @@ fun LostAndFoundApp() {
             containerColor = CityTheme.Cream,
             title = {
                 Text(
-                    "Welcome to Lost & Found",
+                    "Welcome to Balik-Calasiao",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp,
                     color = CityTheme.Green,
