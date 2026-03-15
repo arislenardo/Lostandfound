@@ -87,7 +87,7 @@ exports.onClaimStatusUpdated = functions.firestore
           data: {
             type: "claim_update",
             claimId: change.after.id,
-            foundItemId: newValue.foundItemId,
+            foundItemId: newValue.itemId,
           },
         };
 

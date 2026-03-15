@@ -82,9 +82,9 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> selectedClaimImageUri = uri }
 
-    LaunchedEffect(itemId) {
-        db.collection("found_items").document(itemId).get()
-            .addOnSuccessListener { document ->
+    DisposableEffect(itemId) {
+        val listener = db.collection("found_items").document(itemId)
+            .addSnapshotListener { document, _ ->
                 if (document != null && document.exists()) {
                     val loaded = document.toObject(FoundItem::class.java)?.copy(id = document.id)
                     item = loaded
@@ -102,6 +102,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                     isLoading = false
                 }
             }
+        onDispose { listener.remove() }
     }
     
     // Reactive Claim Status Listener
@@ -306,7 +307,11 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
 
                         Spacer(Modifier.height(4.dp))
                         Text("Description", fontSize = 11.sp, color = CityTheme.Brown.copy(0.4f))
-                        Text(item!!.description, fontSize = 14.sp, color = CityTheme.Brown)
+                        if (isAdmin || item!!.userId == currentUserId) {
+                            Text(item!!.description, fontSize = 14.sp, color = CityTheme.Brown)
+                        } else {
+                            Text("Description hidden for verification purposes.", fontSize = 14.sp, color = CityTheme.Brown.copy(alpha = 0.5f), fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                        }
                     }
 
                     // Admin section
@@ -337,6 +342,35 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                     onClick = {
                                         db.collection("found_items").document(item!!.id).update("status", ItemStatus.RETURNED)
                                             .addOnSuccessListener {
+                                                // Propagate status to claims and lost items
+                                                db.collection("claims")
+                                                    .whereEqualTo("itemId", item!!.id)
+                                                    .get()
+                                                    .addOnSuccessListener { snapshot ->
+                                                        for (claimDoc in snapshot.documents) {
+                                                            val status = claimDoc.getString("status")
+                                                            // Only transition from APPROVED to RETURNED
+                                                            if (status == ClaimStatus.APPROVED) {
+                                                                db.collection("claims").document(claimDoc.id).update("status", ClaimStatus.RETURNED)
+                                                                val lostItemId = claimDoc.getString("lostItemId")
+                                                                if (!lostItemId.isNullOrBlank()) {
+                                                                    db.collection("found_items").document(item!!.id).update("claimedLostItemId", lostItemId)
+                                                                    db.collection("lost_items").document(lostItemId).update(
+                                                                        "status", ClaimStatus.RETURNED,
+                                                                        "claimedFoundItemId", item!!.id
+                                                                    )
+                                                                }
+                                                            } else if (status != ClaimStatus.RETURNED) {
+                                                                db.collection("claims").document(claimDoc.id).update("status", "ARCHIVED_SYSTEM")
+                                                                val lostItemId = claimDoc.getString("lostItemId")
+                                                                if (!lostItemId.isNullOrBlank()) {
+                                                                    // Reset other lost items that didn't get this physical item
+                                                                    db.collection("lost_items").document(lostItemId).update("status", "")
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
                                                 val action = com.example.lostandfound.model.AdminAction(
                                                     adminId = currentUserId ?: "",
                                                     adminName = auth.currentUser?.email ?: "",
@@ -347,8 +381,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                                 db.collection("admin_history").add(action).addOnSuccessListener { doc ->
                                                     db.collection("admin_history").document(doc.id).update("id", doc.id)
                                                 }
-                                                Toast.makeText(context, "Marked as RETURNED", Toast.LENGTH_SHORT).show()
-                                                navController.popBackStack()
+                                                Toast.makeText(context, "Item Returned and Linked Reports Resolved", Toast.LENGTH_SHORT).show()
                                             }
                                         showReturnConfirm = false
                                     },
@@ -589,6 +622,18 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                     TextButton(onClick = { if (!isSubmittingClaim) showClaimDialog = false }) { Text("Cancel", color = CityTheme.Brown.copy(0.6f)) }
                                 }
                             )
+                        }
+                    }
+
+                    if (item!!.status == ItemStatus.RETURNED && item!!.claimedLostItemId.isNotBlank()) {
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { navController.navigate("item_detail/${item!!.claimedLostItemId}") },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("View Linked Lost Report", color = CityTheme.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

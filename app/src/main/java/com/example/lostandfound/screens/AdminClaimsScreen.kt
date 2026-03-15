@@ -76,7 +76,11 @@ fun AdminClaimsScreen(navController: NavController) {
                 }
                 // ALSO: If approved, mark the found item as CLAIMED so it disappears from public search
                 if (newStatus == ClaimStatus.APPROVED) {
-                    db.collection("found_items").document(claim.itemId).update("status", "CLAIMED")
+                    val map = mutableMapOf<String, Any>("status" to "CLAIMED")
+                    if (claim.lostItemId.isNotBlank()) {
+                        map["claimedLostItemId"] = claim.lostItemId
+                    }
+                    db.collection("found_items").document(claim.itemId).update(map)
                 }
                 // 1. Create a notification for the user
                 val notification = com.example.lostandfound.model.ClaimNotification(

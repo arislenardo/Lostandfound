@@ -18,6 +18,7 @@ data class FoundItem(
     val imageUrl: String = "",
     val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
     val status: String = ItemStatus.FOUND,
+    val claimedLostItemId: String = "",
     val createdAt: Date? = null
 )
 

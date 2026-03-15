@@ -19,6 +19,7 @@ object ClaimStatus {
     const val DISPUTED = "DISPUTED"
     const val CLAIM_PENDING = "CLAIM_PENDING"
     const val FOUND = "FOUND"
+    const val RETURNED = "RETURNED"
 }
 
 object MatchNotificationStatus {

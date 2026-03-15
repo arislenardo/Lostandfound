@@ -55,17 +55,18 @@ fun MyItemsScreen(navController: NavController) {
     var itemToMarkFound by remember { mutableStateOf<LostItem?>(null) }
     
 
-    LaunchedEffect(isAdmin, currentUserId) {
+    DisposableEffect(isAdmin, currentUserId) {
         var q: Query = db.collection("lost_items")
         if (!isAdmin) currentUserId?.let { q = q.whereEqualTo("userId", it) }
-        q.limit(500).get()
-            .addOnSuccessListener { result ->
-                allItems = result.documents.mapNotNull { doc -> 
-                    doc.toObject(LostItem::class.java)?.copy(id = doc.id) 
+        val listener = q.addSnapshotListener { result, _ ->
+            if (result != null) {
+                allItems = result.documents.mapNotNull { doc ->
+                    doc.toObject(LostItem::class.java)?.copy(id = doc.id)
                 }.sortedWith(compareByDescending<LostItem> { it.createdAt?.time ?: 0L }.thenByDescending { it.dateLost.time })
-                isLoading = false
             }
-            .addOnFailureListener { isLoading = false }
+            isLoading = false
+        }
+        onDispose { listener.remove() }
     }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -93,6 +94,7 @@ fun MyItemsScreen(navController: NavController) {
             list = list.filter { 
                 when(selectedStatus) {
                     "SEARCHING" -> it.status != ClaimStatus.FOUND && 
+                                  it.status != ClaimStatus.RETURNED &&
                                   it.status != ClaimStatus.CLAIM_PENDING && 
                                   it.status != ClaimStatus.DISPUTED && 
                                   it.status != ClaimStatus.APPROVED && 
@@ -101,7 +103,7 @@ fun MyItemsScreen(navController: NavController) {
                                      it.status == ClaimStatus.DISPUTED || 
                                      it.status == ClaimStatus.APPROVED || 
                                      it.status == ClaimStatus.REJECTED
-                    "RESOLVED" -> it.status == ClaimStatus.FOUND
+                    "RESOLVED" -> it.status == ClaimStatus.FOUND || it.status == ClaimStatus.RETURNED
                     else -> true
                 }
             }
@@ -278,21 +280,38 @@ fun MyItemsScreen(navController: NavController) {
             AlertDialog(
                 onDismissRequest = { showFoundConfirm = false },
                 shape = RoundedCornerShape(16.dp),
-                title = { Text("Item Found?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
-                text = { Text("Are you sure? This will mark the '${itemToMarkFound!!.name}' report as FOUND in the system. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
+                title = { Text("Mark as Resolved?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+                text = { Text("Are you sure? This will mark the '${itemToMarkFound!!.name}' report as RESOLVED. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
                 confirmButton = {
                     Button(
                         onClick = {
-                            db.collection("lost_items").document(itemToMarkFound!!.id).update("status", ClaimStatus.FOUND)
-                                .addOnSuccessListener {
-                                    Toast.makeText(context, "Marked as Found!", Toast.LENGTH_SHORT).show()
-                                    // Update local state to reflect change without removing from list
-                                    allItems = allItems.map { if (it.id == itemToMarkFound!!.id) it.copy(status = ClaimStatus.FOUND) else it }
-                                }
+                            db.collection("lost_items").document(itemToMarkFound!!.id).update(
+                                mapOf(
+                                    "status" to ClaimStatus.FOUND,
+                                    "claimedFoundItemId" to "" // Clear link if manually resolved
+                                )
+                            ).addOnSuccessListener {
+                                // Archive any active claims related to this manually resolved item
+                                db.collection("claims")
+                                    .whereEqualTo("lostItemId", itemToMarkFound!!.id)
+                                    .whereIn("status", listOf(ClaimStatus.PENDING, ClaimStatus.APPROVED, ClaimStatus.DISPUTED))
+                                    .get()
+                                    .addOnSuccessListener { snap ->
+                                        val batch = db.batch()
+                                        snap.documents.forEach { doc ->
+                                            batch.update(doc.reference, "status", "ARCHIVED_MANUAL")
+                                        }
+                                        if (!snap.isEmpty) batch.commit()
+                                    }
+
+                                Toast.makeText(context, "Marked as Resolved! Active claims archived.", Toast.LENGTH_SHORT).show()
+                                // Update local state to reflect change without removing from list
+                                allItems = allItems.map { if (it.id == itemToMarkFound!!.id) it.copy(status = ClaimStatus.FOUND, claimedFoundItemId = "") else it }
+                            }
                             showFoundConfirm = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                    ) { Text("Yes, Mark Found") }
+                    ) { Text("Yes, Mark Resolved") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showFoundConfirm = false }) {
@@ -311,7 +330,7 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
 
     Card(
         modifier = Modifier.fillMaxWidth().shadow(3.dp, RoundedCornerShape(14.dp))
-            .clickable(enabled = isAdmin) { navController.navigate("item_detail/${item.id}") },
+            .clickable { navController.navigate("item_detail/${item.id}") },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CityTheme.White),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -357,6 +376,7 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                 if (item.status != ClaimStatus.APPROVED &&
                     item.status != ClaimStatus.REJECTED &&
                     item.status != ClaimStatus.FOUND &&
+                    item.status != ClaimStatus.RETURNED &&
                     item.status != ClaimStatus.CLAIM_PENDING &&
                     item.status != ClaimStatus.DISPUTED
                 ) {
@@ -366,14 +386,15 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                    ) { Text("I Found It (Mark Found)", fontSize = 13.sp) }
+                    ) { Text("Mark as Resolved", fontSize = 13.sp) }
                 } else {
                     Spacer(Modifier.height(8.dp))
                     val (statusLabel, statusColor) = when (item.status) {
                         ClaimStatus.APPROVED      -> "APPROVED (Pick up at Station)" to CityTheme.Green
                         ClaimStatus.REJECTED      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
                         ClaimStatus.DISPUTED      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
-                        ClaimStatus.FOUND         -> "FOUND & RESOLVED" to CityTheme.Green
+                        ClaimStatus.FOUND         -> "RESOLVED (FOUND PERSONALLY)" to CityTheme.Green
+                        ClaimStatus.RETURNED      -> "RESOLVED (RETURNED BY STATION)" to CityTheme.Green
                         ClaimStatus.CLAIM_PENDING -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
                         else                      -> "STATUS: ${item.status}" to CityTheme.Gold
                     }
@@ -381,11 +402,7 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = statusColor.copy(alpha = 0.12f),
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .clickable(enabled = item.claimedFoundItemId.isNotBlank()) {
-                                navController.navigate("found_item_detail/${item.claimedFoundItemId}?lostItemId=${item.id}")
-                            }
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -394,15 +411,6 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                             Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(statusColor))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(statusLabel, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            if (item.claimedFoundItemId.isNotBlank()) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForward,
-                                    null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = statusColor
-                                )
-                            }
                         }
                     }
                 }

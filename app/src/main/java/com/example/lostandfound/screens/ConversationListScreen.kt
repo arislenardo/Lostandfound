@@ -40,28 +40,48 @@ fun ConversationListScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var currentPage by remember { mutableStateOf(0) }
 
-    LaunchedEffect(currentUserId) {
-        if (currentUserId.isBlank()) { isLoading = false; return@LaunchedEffect }
-        db.collection("messages").orderBy("timestamp", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null) { isLoading = false; return@addSnapshotListener }
-                val allMessages = snapshot.documents.mapNotNull { doc ->
-                    try {
-                        doc.toObject(Message::class.java)?.copy(id = doc.id)
-                    } catch (ex: Exception) {
-                        null // Prevent crash if a message is malformed
-                    }
+    DisposableEffect(currentUserId) {
+        if (currentUserId.isBlank()) { isLoading = false; return@DisposableEffect onDispose {} }
+        var q1Messages = listOf<Message>()
+        var q2Messages = listOf<Message>()
+        
+        fun mergeAndSet() {
+            val allMessages = (q1Messages + q2Messages).sortedByDescending { it.timestamp }
+            val conversationsMap = mutableMapOf<String, Message>()
+            for (msg in allMessages) {
+                val otherId = if (msg.senderId == currentUserId) msg.receiverId else msg.senderId
+                if (!conversationsMap.containsKey(otherId)) {
+                    conversationsMap[otherId] = msg
                 }
-                val conversationsMap = mutableMapOf<String, Message>()
-                for (msg in allMessages) {
-                    val otherId = if (msg.senderId == currentUserId) msg.receiverId else msg.senderId
-                    if ((msg.senderId == currentUserId || msg.receiverId == currentUserId) && !conversationsMap.containsKey(otherId)) {
-                        conversationsMap[otherId] = msg
-                    }
-                }
-                uniqueConversations = conversationsMap.values.toList()
-                isLoading = false
             }
+            uniqueConversations = conversationsMap.values.toList()
+            isLoading = false
+        }
+
+        val listener1 = db.collection("messages")
+            .whereEqualTo("senderId", currentUserId)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null) return@addSnapshotListener
+                q1Messages = snapshot.documents.mapNotNull { doc ->
+                    try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (ex: Exception) { null }
+                }
+                mergeAndSet()
+            }
+
+        val listener2 = db.collection("messages")
+            .whereEqualTo("receiverId", currentUserId)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null) return@addSnapshotListener
+                q2Messages = snapshot.documents.mapNotNull { doc ->
+                    try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (ex: Exception) { null }
+                }
+                mergeAndSet()
+            }
+            
+        onDispose {
+            listener1.remove()
+            listener2.remove()
+        }
     }
 
     Scaffold(

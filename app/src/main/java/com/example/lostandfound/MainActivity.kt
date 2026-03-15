@@ -162,7 +162,7 @@ fun LostAndFoundApp() {
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Only residents of Calasiao can use the platform directly for found items.",
+                        "Only residents of Calasiao can use the platform directly.",
                         fontSize = 12.sp,
                         color = CityTheme.Brown.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center
@@ -176,7 +176,7 @@ fun LostAndFoundApp() {
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Yes, I am")
+                    Text("Yes, I am.")
                 }
             },
             dismissButton = {
@@ -187,7 +187,7 @@ fun LostAndFoundApp() {
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 ) {
-                    Text("No, I'm not", color = CityTheme.Error)
+                    Text("No, I'm not.", color = CityTheme.Error)
                 }
             }
         )
@@ -210,7 +210,7 @@ fun LostAndFoundApp() {
             },
             text = {
                 Text(
-                    "Non-Calasiao residents must immediately surrender any found items directly to the Calasiao Police Station (PNP). You cannot use the app to hold or report items.",
+                    "Non-Calasiao residents must immediately surrender any found items directly to the Calasiao Police Station. You cannot use the app to report lost or found items.",
                     fontSize = 14.sp,
                     color = CityTheme.Brown,
                     textAlign = TextAlign.Center

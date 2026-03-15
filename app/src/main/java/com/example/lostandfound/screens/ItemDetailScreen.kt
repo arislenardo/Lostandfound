@@ -186,6 +186,31 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                 modifier = Modifier.fillMaxSize().padding(paddingValues).verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Status Badge
+                if (!isEditing) {
+                    val (statusLabel, statusColor) = when (item!!.status) {
+                        "APPROVED"      -> "APPROVED (Pick up at Station)" to CityTheme.Green
+                        "REJECTED"      -> "REJECTED" to CityTheme.Error
+                        "DISPUTED"      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
+                        "FOUND"         -> "RESOLVED (FOUND PERSONALLY)" to CityTheme.Green
+                        "RETURNED"      -> "RESOLVED (RETURNED BY STATION)" to CityTheme.Green
+                        "CLAIM_PENDING" -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
+                        else            -> "SEARCHING" to CityTheme.Gold
+                    }
+                    
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = statusColor.copy(alpha = 0.12f),
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(statusColor))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(statusLabel, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 // Image
                 if (item!!.imageUrl.isNotBlank() && !isEditing) {
                     Card(
@@ -273,6 +298,27 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                             DetailRow("Reporter", item!!.email)
                             if (isAdmin) DetailRow("User ID", item!!.userId)
                         }
+                    }
+
+                    if (item!!.claimedFoundItemId.isNotBlank()) {
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { navController.navigate("found_item_detail/${item!!.claimedFoundItemId}") },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("View Linked Found Item", color = CityTheme.White, fontWeight = FontWeight.Bold)
+                        }
+                    } else if (item!!.status == "FOUND") {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "This report was marked as resolved personally. No official station record is linked to this manual resolution.",
+                            fontSize = 12.sp,
+                            color = CityTheme.Brown.copy(alpha = 0.5f),
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
                     }
                 }
                 Spacer(Modifier.height(16.dp))
