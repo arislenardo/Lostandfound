@@ -318,7 +318,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                     if (isAdmin || item!!.userId == currentUserId) {
                         CityDetailCard("ADMINISTRATION", tint = CityTheme.Gold) {
                             DetailRowLabel("Reporter Email", item!!.email)
-                            if (isAdmin) {
+                            if (isAdmin && item!!.status != ItemStatus.RETURNED) {
                                 DetailRowLabel("User ID", item!!.userId)
                                 DetailRowLabel("Record ID", item!!.id)
                                 Spacer(Modifier.height(12.dp))
@@ -328,6 +328,9 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
                                 ) { Text("Mark as Returned (Archive)") }
+                            } else if (isAdmin) {
+                                DetailRowLabel("User ID", item!!.userId)
+                                DetailRowLabel("Record ID", item!!.id)
                             }
                         }
                     }
