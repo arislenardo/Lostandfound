@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,8 +51,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.example.lostandfound.model.FoundItem
 import com.example.lostandfound.model.LostItem
-import com.example.lostandfound.model.MatchNotificationStatus
+import com.example.lostandfound.model.ItemStatus
 import com.example.lostandfound.model.ClaimStatus
+import com.example.lostandfound.model.MatchNotificationStatus
 import com.example.lostandfound.R
 import com.example.lostandfound.utils.findPotentialMatches
 import com.example.lostandfound.utils.uploadImageToStorage
@@ -368,7 +370,8 @@ fun ReportLostItemScreen(navController: NavController) {
             db.collection("found_items").get().addOnSuccessListener { result ->
                 val allFoundItems = result.documents.mapNotNull { doc ->
                     val obj = doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
-                    if (obj != null && obj.status == com.example.lostandfound.model.ItemStatus.FOUND) obj else null
+                    // Match against anything that isn't already returned or claimed
+                    if (obj != null && (obj.status.equals(ItemStatus.FOUND, ignoreCase = true) || obj.status.equals(ClaimStatus.FOUND, ignoreCase = true))) obj else null
                 }
                 scope.launch {
                     val matches = withContext(Dispatchers.Default) {
@@ -703,6 +706,30 @@ fun ReportLostItemScreen(navController: NavController) {
                                     MediaStore.Images.Media.getBitmap(context.contentResolver, selectedImageUri!!)
                                 }
                                 Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Preview", modifier = Modifier.fillMaxSize())
+                                
+                                // AI Focus Zone Guide
+                                Box(
+                                    modifier = Modifier
+                                        .size(160.dp)
+                                        .border(2.dp, CityTheme.Gold.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                                        .background(CityTheme.Gold.copy(alpha = 0.05f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            "AI MATCHING ZONE",
+                                            color = CityTheme.Gold,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.sp
+                                        )
+                                        Text(
+                                            "Center item here",
+                                            color = CityTheme.Gold.copy(alpha = 0.8f),
+                                            fontSize = 8.sp
+                                        )
+                                    }
+                                }
                             } else {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(Icons.Default.Add, null, modifier = Modifier.size(40.dp), tint = CityTheme.Green.copy(alpha = 0.5f))
@@ -710,18 +737,19 @@ fun ReportLostItemScreen(navController: NavController) {
                                 }
                             }
                         }
-                        // Photo tips
-                        Spacer(modifier = Modifier.height(10.dp))
+                        // Ideal Conditions Guide
+                        Spacer(modifier = Modifier.height(12.dp))
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = CityTheme.Green.copy(alpha = 0.07f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = CityTheme.Green.copy(alpha = 0.05f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CityTheme.Green.copy(alpha = 0.1f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("📸 Tips for better matching:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CityTheme.Green)
-                                Text("• Place item on a flat, plain surface", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                                Text("• Place item on a flat, plain surface, clear background", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
                                 Text("• Use good lighting — avoid dark/blurry shots", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
-                                Text("• Capture the whole item, close-up & centered", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
+                                Text("• Capture only the item, whole, close-up & centered", fontSize = 11.sp, color = CityTheme.Brown.copy(0.7f))
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))

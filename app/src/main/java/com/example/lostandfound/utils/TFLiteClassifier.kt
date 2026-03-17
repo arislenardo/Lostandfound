@@ -7,8 +7,10 @@ import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
+import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
 import java.nio.MappedByteBuffer
+import kotlin.math.min
 
 /**
  * Feature extractor using MobileNetV3 Large Feature Vector.
@@ -50,8 +52,10 @@ class TFLiteClassifier(val context: Context) {
         }
 
         return try {
+            val minSize = min(bitmap.width, bitmap.height)
             val imageProcessor = ImageProcessor.Builder()
-                .add(ResizeOp(INPUT_SIZE, INPUT_SIZE, ResizeOp.ResizeMethod.BILINEAR))
+                .add(ResizeWithCropOrPadOp(minSize, minSize)) // Center crop to square first
+                .add(ResizeOp(INPUT_SIZE, INPUT_SIZE, ResizeOp.ResizeMethod.BILINEAR)) // Then resize
                 .add(NormalizeOp(0f, 255f)) // scale to [0, 1]
                 .build()
 

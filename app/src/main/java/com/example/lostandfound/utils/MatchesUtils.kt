@@ -15,12 +15,11 @@ import kotlin.math.*
  *    around this range so real matches are not missed.
  *
  *  Scoring (additive, max 1.0):
- *    - Image cosine similarity  : × 0.70  → up to 0.70  [PRIMARY]
- *    - Name Text Similarity      : × 0.20  → up to 0.20  [supplement]
- *    - Description Text Similarity : × 0.15  → up to 0.15  [supplement]
+ *    - Image cosine similarity  : × 0.80  → up to 0.80  [PRIMARY]
+ *    - Name Text Similarity      : × 0.30  → up to 0.30  [supplement]
  *    - Keyword bonus            : +0.20 partial / +0.30 exact name match [supplement]
  *
- *  Threshold: 0.35
+ *  Threshold: 0.30
  *    - Good image + matching name   → ~0.70–1.00  ✅
  *    - Moderate image + similar name → ~0.45–0.65  ✅
  *    - Moderate image alone (0.50)  → 0.35  ✅ (just passes)
@@ -60,11 +59,11 @@ fun findPotentialMatches(
     return pool.map { item ->
         val hasVectors = targetVector.isNotEmpty() && item.imageVector.isNotEmpty()
 
-        // PRIMARY: image cosine similarity (up to 0.70)
-        val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.70 else 0.0
+        // PRIMARY: image cosine similarity (up to 0.80)
+        val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.80 else 0.0
 
         // SUPPLEMENT: name-only text signals (description is extra detail, not a matching signal)
-        val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.20
+        val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.30
         val keywordBonus = when {
             item.name.equals(targetName, ignoreCase = true)         -> 0.30  // exact
             item.name.contains(targetName, ignoreCase = true) ||
@@ -75,7 +74,7 @@ fun findPotentialMatches(
         val finalScore = min(1.0, imageScore + nameScore + keywordBonus)
         item to finalScore
     }
-        .filter { it.second > 0.35 }
+        .filter { it.second > 0.30 }
         .sortedByDescending { it.second }
 }
 
@@ -100,11 +99,11 @@ fun findLostMatches(
     return pool.map { item ->
         val hasVectors = targetVector.isNotEmpty() && item.imageVector.isNotEmpty()
 
-        // PRIMARY: image cosine similarity (up to 0.70)
-        val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.70 else 0.0
+        // PRIMARY: image cosine similarity (up to 0.80)
+        val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.80 else 0.0
 
         // SUPPLEMENT: name-only text signals (description is extra detail, not a matching signal)
-        val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.20
+        val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.30
         val keywordBonus = when {
             item.name.equals(targetName, ignoreCase = true)         -> 0.30  // exact
             item.name.contains(targetName, ignoreCase = true) ||
@@ -115,6 +114,6 @@ fun findLostMatches(
         val finalScore = min(1.0, imageScore + nameScore + keywordBonus)
         item to finalScore
     }
-        .filter { it.second > 0.35 }
+        .filter { it.second > 0.30 }
         .sortedByDescending { it.second }
 }
