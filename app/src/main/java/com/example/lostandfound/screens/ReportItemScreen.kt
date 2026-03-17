@@ -122,6 +122,7 @@ fun ReportItemScreen(navController: NavController) {
 
     // State for Algorithm Matches Dialog
     var showSurrenderDialog by remember { mutableStateOf(false) }
+    var showConfirmSubmitDialog by remember { mutableStateOf(false) }
     var potentialOwners by remember { mutableStateOf<List<Pair<LostItem, Double>>>(emptyList()) }
 
     // Category Dropdown State
@@ -319,11 +320,15 @@ fun ReportItemScreen(navController: NavController) {
                             lostItemOwnerId = lostItem.userId,
                             lostItemName = lostItem.name,
                             foundItemName = itemName,
+                            foundItemImageUrl = imageUrl ?: "",
+                            foundItemLocation = location,
                             matchScore = score,
                             status = MatchNotificationStatus.UNREAD,
                             createdAt = java.util.Date()
                         )
-                        db.collection("match_notifications").add(notification)
+                        db.collection("match_notifications").add(notification).addOnSuccessListener { ref ->
+                            ref.update("id", ref.id)
+                        }
                     }
                 }
                 isSubmitting = false
@@ -354,6 +359,46 @@ fun ReportItemScreen(navController: NavController) {
     }
 
     // --- POPUPS & DIALOGS ---
+
+    if (showConfirmSubmitDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmSubmitDialog = false },
+            title = { Text("Submit Report?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure? Please verify the details are accurate before submitting.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmSubmitDialog = false
+                        coroutineScope.launch {
+                            isCheckingMatches = true
+                            db.collection("lost_items").get().addOnSuccessListener { result ->
+                                val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
+                                    val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
+                                    if (obj != null && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED) obj else null
+                                }
+                                coroutineScope.launch {
+                                    val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
+                                    isCheckingMatches = false
+                                    if (matches.isNotEmpty()) { potentialOwners = matches }
+                                    finalizeReportUpload()
+                                }
+                            }.addOnFailureListener { isCheckingMatches = false; finalizeReportUpload() }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                ) {
+                    Text("Submit", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmSubmitDialog = false }) {
+                    Text("Cancel", color = CityTheme.Brown)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CityTheme.White
+        )
+    }
 
     if (showSurrenderDialog) {
         AlertDialog(
@@ -739,7 +784,6 @@ fun ReportItemScreen(navController: NavController) {
                     }
                 }
             }
-
             // SUBMIT BUTTON
             item {
                 if (isSubmitting || isCheckingMatches) {
@@ -756,21 +800,7 @@ fun ReportItemScreen(navController: NavController) {
                             } else if (category.isBlank()) {
                                 Toast.makeText(context, "Please select a category — it helps us find a match", Toast.LENGTH_LONG).show()
                             } else {
-                                    coroutineScope.launch {
-                                        isCheckingMatches = true
-                                        db.collection("lost_items").get().addOnSuccessListener { result ->
-                                                val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
-                                                    val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
-                                                    if (obj != null && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED) obj else null
-                                                }
-                                            coroutineScope.launch {
-                                                val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
-                                                isCheckingMatches = false
-                                                if (matches.isNotEmpty()) { potentialOwners = matches }
-                                                finalizeReportUpload()
-                                            }
-                                        }.addOnFailureListener { isCheckingMatches = false; finalizeReportUpload() }
-                                    }
+                                showConfirmSubmitDialog = true
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),

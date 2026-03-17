@@ -1,12 +1,21 @@
 # Lost and Found App
 
-A comprehensive Android application designed to help users report and find lost or found items within a community (e.g., a residential area, campus, or workplace). The system features intelligent item matching, real-time chat, and an administrative portal for claim verification.
+A comprehensive Android application for PNP Calasiao designed to help users report lost or found items within Calasiao. The system features intelligent item matching, real-time chat, and an administrative portal for claim verification.
+
+## 📱 Get the App
+
+You can quickly get started by downloading and installing the pre-built APK:
+
+1. **Download APK**: [📲 Download app-debug.apk](https://github.com/arislenardo/Lostandfound/releases/download/alpha/app-debug.apk) 
+2. **Install**: Enable "Install from Unknown Sources" in your Android settings, then open the downloaded file.
+
+---
 
 ## 🚀 Key Features
 
 - **Item Reporting**: Easily report lost or found items with descriptions, categories, and locations.
-- **Intelligent Matching**: Uses text similarity and geolocation to automatically suggest potential matches between lost and found reports.
-- **Real-time Messaging**: Built-in chat system for users to communicate and coordinate item returns.
+- **Intelligent Matching**: Uses text and image similarity to automatically suggest potential matches between lost and found reports.
+- **Real-time Messaging**: Built-in chat system for admins and users to communicate and coordinate item returns.
 - **Admin Portal**: A dedicated web interface for administrators to manage reports, verify claims, and monitor system activity.
 - **Push Notifications**: Stay updated on new matches and incoming messages.
 - **Category Browsing**: Explore items by category for easier discovery.
@@ -17,20 +26,9 @@ A comprehensive Android application designed to help users report and find lost 
 - **Backend/Database**: Firebase (Firestore, Authentication, Cloud Functions, Cloud Messaging)
 - **Deployment**: Firebase Hosting (for Admin Portal)
 
-## 📦 Project Structure
+## 🛠 Developer Installation & Setup
 
-```text
-Lostandfound/
-├── app/                # Android Mobile App (Kotlin/Compose)
-│   ├── src/main/java/  # Source code
-│   └── ...
-├── functions/          # Firebase Cloud Functions (Node.js)
-├── public/             # Admin Portal Web Assets
-├── documentation/      # Project Documentation & Proposal
-└── ...
-```
-
-## 🛠 Installation & Setup
+If you're a developer and want to build the project from scratch, follow these steps:
 
 ### Prerequisites
 - Android Studio (Ladybug or newer)
@@ -58,7 +56,7 @@ Lostandfound/
    - Run the app on an emulator or physical device.
 
 ## 👥 Contributors
-- [Your Name/Team Name]
+- DAYOnamics
 
 ## 📄 License
 This project is licensed under the MIT License - see the LICENSE file for details.

@@ -38,6 +38,38 @@ fun cosineSimilarity(a: List<Double>, b: List<Double>): Double {
     return if (normA == 0.0 || normB == 0.0) 0.0 else dot / (normA * normB)
 }
 
+// --- Enhanced Image Similarity (Semantic + Color) ---
+fun calculateImageSimilarity(a: List<Double>, b: List<Double>): Double {
+    if (a.isEmpty() || b.isEmpty()) return 0.0
+
+    val mnSize = 1280 // MobileNet vector size
+    val mnA = a.take(mnSize)
+    val mnB = b.take(mnSize)
+    val simMN = max(0.0, cosineSimilarity(mnA, mnB))
+    
+    // If color histograms are appended (backwards compatible)
+    if (a.size > mnSize && b.size > mnSize) {
+        val histA = a.drop(mnSize)
+        val histB = b.drop(mnSize)
+        val hSize = min(histA.size, histB.size)
+        
+        var histIntersection = 0.0
+        for (i in 0 until hSize) {
+            histIntersection += min(histA[i], histB[i])
+        }
+        
+        // Softened color scoring:
+        // We still use color to differentiate, but we don't "kill" the match 
+        // as aggressively if the color intersection is low (common with bottles).
+        val weightMN = 0.7
+        val weightHist = 0.3
+        
+        return simMN * weightMN + histIntersection * weightHist
+    }
+    
+    return simMN
+}
+
 // --- Match found items against a lost item report ---
 fun findPotentialMatches(
     targetName: String,
@@ -59,22 +91,26 @@ fun findPotentialMatches(
     return pool.map { item ->
         val hasVectors = targetVector.isNotEmpty() && item.imageVector.isNotEmpty()
 
-        // PRIMARY: image cosine similarity (up to 0.80)
-        val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.80 else 0.0
+        // PRIMARY: image cosine similarity + color
+        val imageScore = if (hasVectors) calculateImageSimilarity(targetVector, item.imageVector) * 0.80 else 0.0
 
         // SUPPLEMENT: name-only text signals (description is extra detail, not a matching signal)
         val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.30
+        
+        val exactName = item.name.equals(targetName, ignoreCase = true)
+        val partialName = (item.name.contains(targetName, ignoreCase = true) && targetName.length > 3) ||
+                          (targetName.contains(item.name, ignoreCase = true) && item.name.length > 3)
+
         val keywordBonus = when {
-            item.name.equals(targetName, ignoreCase = true)         -> 0.30  // exact
-            item.name.contains(targetName, ignoreCase = true) ||
-            targetName.contains(item.name, ignoreCase = true)       -> 0.20  // partial
-            else                                                     -> 0.0
+            exactName -> 0.30  // exact
+            partialName -> 0.20  // partial
+            else -> 0.0
         }
 
         val finalScore = min(1.0, imageScore + nameScore + keywordBonus)
         item to finalScore
     }
-        .filter { it.second > 0.30 }
+        .filter { it.second > 0.32 } // Lowered threshold to allow more "potential" matches for admin review
         .sortedByDescending { it.second }
 }
 
@@ -99,21 +135,25 @@ fun findLostMatches(
     return pool.map { item ->
         val hasVectors = targetVector.isNotEmpty() && item.imageVector.isNotEmpty()
 
-        // PRIMARY: image cosine similarity (up to 0.80)
-        val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.80 else 0.0
+        // PRIMARY: image cosine similarity + color
+        val imageScore = if (hasVectors) calculateImageSimilarity(targetVector, item.imageVector) * 0.80 else 0.0
 
         // SUPPLEMENT: name-only text signals (description is extra detail, not a matching signal)
         val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.30
+        
+        val exactName = item.name.equals(targetName, ignoreCase = true)
+        val partialName = (item.name.contains(targetName, ignoreCase = true) && targetName.length > 3) ||
+                          (targetName.contains(item.name, ignoreCase = true) && item.name.length > 3)
+
         val keywordBonus = when {
-            item.name.equals(targetName, ignoreCase = true)         -> 0.30  // exact
-            item.name.contains(targetName, ignoreCase = true) ||
-            targetName.contains(item.name, ignoreCase = true)       -> 0.20  // partial
-            else                                                     -> 0.0
+            exactName -> 0.30  // exact
+            partialName -> 0.20  // partial
+            else -> 0.0
         }
 
         val finalScore = min(1.0, imageScore + nameScore + keywordBonus)
         item to finalScore
     }
-        .filter { it.second > 0.30 }
+        .filter { it.second > 0.32 } // Lowered threshold to allow more "potential" matches for admin review
         .sortedByDescending { it.second }
 }

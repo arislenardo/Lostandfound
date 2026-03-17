@@ -11,6 +11,7 @@ import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
 import java.nio.MappedByteBuffer
 import kotlin.math.min
+import kotlin.math.max
 
 /**
  * Feature extractor using MobileNetV3 Large Feature Vector.
@@ -52,9 +53,9 @@ class TFLiteClassifier(val context: Context) {
         }
 
         return try {
-            val minSize = min(bitmap.width, bitmap.height)
+            val maxSize = max(bitmap.width, bitmap.height)
             val imageProcessor = ImageProcessor.Builder()
-                .add(ResizeWithCropOrPadOp(minSize, minSize)) // Center crop to square first
+                .add(ResizeWithCropOrPadOp(maxSize, maxSize)) // Pad to square to prevent cropping large objects
                 .add(ResizeOp(INPUT_SIZE, INPUT_SIZE, ResizeOp.ResizeMethod.BILINEAR)) // Then resize
                 .add(NormalizeOp(0f, 255f)) // scale to [0, 1]
                 .build()
@@ -67,11 +68,64 @@ class TFLiteClassifier(val context: Context) {
             val output = Array(1) { FloatArray(OUTPUT_SIZE) }
             interp.run(tensorImage.buffer, output)
 
-            output[0].map { it.toDouble() }
+            val modelFeatures = output[0].map { it.toDouble() }
+            val colorHist = extractCenterHSVHistogram(bitmap)
+            
+            modelFeatures + colorHist
         } catch (e: Exception) {
             android.util.Log.e("TFLiteClassifier", "Feature extraction error: ${e.message}", e)
             emptyList()
         }
+    }
+
+    /**
+     * Extracts an HSV color histogram from the center 50% of the image.
+     * Gives 128 bins (8 H, 4 S, 4 V) to accurately represent object color
+     * independently of its MobileNet semantic classification.
+     */
+    private fun extractCenterHSVHistogram(bitmap: Bitmap): List<Double> {
+        val hBins = 8
+        val sBins = 4
+        val vBins = 4
+        val hist = DoubleArray(hBins * sBins * vBins)
+        
+        // Take center 50% of the image to minimize background noise
+        val cx = bitmap.width / 2
+        val cy = bitmap.height / 2
+        val halfW = bitmap.width / 4
+        val halfH = bitmap.height / 4
+        val startX = max(0, cx - halfW)
+        val startY = max(0, cy - halfH)
+        val width = min(bitmap.width - startX, halfW * 2)
+        val height = min(bitmap.height - startY, halfH * 2)
+        
+        if (width <= 0 || height <= 0) return hist.toList()
+
+        val centerBitmap = Bitmap.createBitmap(bitmap, startX, startY, width, height)
+        val scaled = Bitmap.createScaledBitmap(centerBitmap, 64, 64, true)
+        
+        val pixels = IntArray(64 * 64)
+        scaled.getPixels(pixels, 0, 64, 0, 0, 64, 64)
+        
+        val hsv = FloatArray(3)
+        var total = 0
+        for (color in pixels) {
+            android.graphics.Color.colorToHSV(color, hsv)
+            val h = ((hsv[0] / 360f) * hBins).toInt().coerceIn(0, hBins - 1)
+            val s = (hsv[1] * sBins).toInt().coerceIn(0, sBins - 1)
+            val v = (hsv[2] * vBins).toInt().coerceIn(0, vBins - 1)
+            
+            hist[(h * sBins * vBins) + (s * vBins) + v] += 1.0
+            total++
+        }
+        
+        if (total > 0) {
+            for (i in hist.indices) {
+                hist[i] /= total.toDouble()
+            }
+        }
+        
+        return hist.toList()
     }
 
     /**

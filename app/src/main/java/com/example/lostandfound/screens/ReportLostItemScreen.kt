@@ -115,6 +115,7 @@ fun ReportLostItemScreen(navController: NavController) {
     var isCheckingMatches by remember { mutableStateOf(false) }
     var isFetchingLocation by remember { mutableStateOf(false) }
     var showNoImageWarning by remember { mutableStateOf(false) }
+    var showConfirmSubmitDialog by remember { mutableStateOf(false) }
 
     // Map State
     val cameraPositionState = rememberCameraPositionState {
@@ -398,6 +399,35 @@ fun ReportLostItemScreen(navController: NavController) {
     }
 
     // --- DIALOGS ---
+    if (showConfirmSubmitDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmSubmitDialog = false },
+            title = { Text("Submit Report?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure? Please verify the details are accurate before submitting.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmSubmitDialog = false
+                        if (selectedImageUri == null) {
+                            showNoImageWarning = true
+                        } else {
+                            startMatchingAndSave(context, db, coroutineScope)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                ) {
+                    Text("Submit", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmSubmitDialog = false }) {
+                    Text("Cancel", color = CityTheme.Brown)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CityTheme.White
+        )
+    }
     if (isCheckingMatches) {
         AlertDialog(
             onDismissRequest = { /* Prevent dismissal */ },
@@ -969,14 +999,12 @@ fun ReportLostItemScreen(navController: NavController) {
                 } else {
                     Button(
                         onClick = {
-                            if (itemName.isBlank()) {
-                                Toast.makeText(context, "Please enter an item name", Toast.LENGTH_SHORT).show()
+                            if (itemName.isBlank() || location.isBlank()) {
+                                Toast.makeText(context, "Please fill in the item name and location", Toast.LENGTH_SHORT).show()
                             } else if (category.isBlank()) {
-                                Toast.makeText(context, "Please select a category — it helps us find a match", Toast.LENGTH_LONG).show()
-                            } else if (selectedImageUri == null) {
-                                showNoImageWarning = true
+                                Toast.makeText(context, "Please select a category", Toast.LENGTH_LONG).show()
                             } else {
-                                startMatchingAndSave(context, db, coroutineScope)
+                                showConfirmSubmitDialog = true
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
