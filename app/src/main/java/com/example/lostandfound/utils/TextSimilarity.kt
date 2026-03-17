@@ -3,12 +3,6 @@ package com.example.lostandfound.utils
 /**
  * Text similarity for lost-and-found item name/description matching.
  *
- * WHY NOT JARO-WINKLER:
- *  Jaro-Winkler is character-level and heavily prefix-weighted. For item descriptions,
- *  word order varies and prefixes are rarely consistent:
- *    "Samsung Galaxy A54" vs "Galaxy A54 Samsung"  → JW scores poorly
- *    "brown leather wallet" vs "wallet, brown"      → JW scores poorly
- *
  * WHY TOKEN JACCARD + CONTAINMENT:
  *  1. Normalizes and tokenizes both strings into word sets
  *  2. Jaccard similarity = |intersection| / |union| — pure word overlap, order-independent
@@ -23,7 +17,7 @@ package com.example.lostandfound.utils
  *  "blue backpack"       vs "JanSport blue bag"         → ~0.33  (partial, expected)
  *  "phone"               vs "keys"                      → ~0.0   ✅
  */
-object JaroWinkler {
+object TextSimilarity {
 
     // Drop common filler words that add noise and don't identify an item
     private val STOP_WORDS = setOf(

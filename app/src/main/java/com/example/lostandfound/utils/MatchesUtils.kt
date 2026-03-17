@@ -16,8 +16,8 @@ import kotlin.math.*
  *
  *  Scoring (additive, max 1.0):
  *    - Image cosine similarity  : × 0.70  → up to 0.70  [PRIMARY]
- *    - Name Jaro-Winkler        : × 0.20  → up to 0.20  [supplement]
- *    - Description Jaro-Winkler : × 0.15  → up to 0.15  [supplement]
+ *    - Name Text Similarity      : × 0.20  → up to 0.20  [supplement]
+ *    - Description Text Similarity : × 0.15  → up to 0.15  [supplement]
  *    - Keyword bonus            : +0.20 partial / +0.30 exact name match [supplement]
  *
  *  Threshold: 0.35
@@ -64,7 +64,7 @@ fun findPotentialMatches(
         val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.70 else 0.0
 
         // SUPPLEMENT: name-only text signals (description is extra detail, not a matching signal)
-        val nameScore    = JaroWinkler.similarity(targetName, item.name) * 0.20
+        val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.20
         val keywordBonus = when {
             item.name.equals(targetName, ignoreCase = true)         -> 0.30  // exact
             item.name.contains(targetName, ignoreCase = true) ||
@@ -104,7 +104,7 @@ fun findLostMatches(
         val imageScore = if (hasVectors) cosineSimilarity(targetVector, item.imageVector) * 0.70 else 0.0
 
         // SUPPLEMENT: name-only text signals (description is extra detail, not a matching signal)
-        val nameScore    = JaroWinkler.similarity(targetName, item.name) * 0.20
+        val nameScore    = TextSimilarity.similarity(targetName, item.name) * 0.20
         val keywordBonus = when {
             item.name.equals(targetName, ignoreCase = true)         -> 0.30  // exact
             item.name.contains(targetName, ignoreCase = true) ||
