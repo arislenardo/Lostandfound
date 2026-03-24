@@ -12,6 +12,8 @@ object CityTheme {
     val GreenLight = Color(0xFF40916C)   // Lighter green      – gradients
     val Gold       = Color(0xFFD4A017)   // Golden yellow      – accents / badges
     val GoldLight  = Color(0xFFF4C430)   // Bright gold        – highlights
+    val Ube        = Color(0xFF8D5BA1)   // Ube violet         – heritage/accent
+    val UbeLight   = Color(0xFFA67BB8)   // Light ube          – gradients/softness
     val Brown      = Color(0xFF5C3D1E)   // Warm brown         – text / outlines
     val Cream      = Color(0xFFFDF8F0)   // Off-white cream    – backgrounds
     val White      = Color(0xFFFFFFFF)   // Pure white         – card surfaces

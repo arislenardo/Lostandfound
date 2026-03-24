@@ -17,6 +17,21 @@ object ChatManager {
             .add(message)
             .addOnSuccessListener { doc ->
                 db.collection("messages").document(doc.id).update("id", doc.id)
+                
+                // --- NEW: TRIGGER EMAIL NOTIFICATION ---
+                db.collection("users").document(message.receiverId).get()
+                    .addOnSuccessListener { userDoc ->
+                        val receiverEmail = userDoc.getString("email") ?: ""
+                        if (receiverEmail.isNotBlank()) {
+                            com.example.lostandfound.data.EmailService.sendNewMessageNotification(
+                                receiverEmail = receiverEmail,
+                                senderName = message.senderName,
+                                messageText = message.text
+                            )
+                        }
+                    }
+                // ----------------------------------------
+
                 onSuccess()
             }
             .addOnFailureListener { onFailure(it) }

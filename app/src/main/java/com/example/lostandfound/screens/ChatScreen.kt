@@ -40,6 +40,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import com.example.lostandfound.components.FullScreenImageDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,8 +62,13 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
     val context = LocalContext.current
     val isAdmin = remember { AuthManager.isCurrentUserAdmin() }
     var showEndChatDialog by remember { mutableStateOf(false) }
+    var showFullScreenImage by remember { mutableStateOf<String?>(null) }
 
     var isChatClosed by remember { mutableStateOf(false) }
+
+    showFullScreenImage?.let { url ->
+        FullScreenImageDialog(url) { showFullScreenImage = null }
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -173,7 +182,11 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
                 items(messages) { msg ->
-                    CityMessageBubble(message = msg, isCurrentUser = msg.senderId == currentUserId)
+                    CityMessageBubble(
+                        message = msg, 
+                        isCurrentUser = msg.senderId == currentUserId,
+                        onImageClick = { url -> showFullScreenImage = url }
+                    )
                 }
             }
 
@@ -263,6 +276,7 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                                                         val msg = Message(
                                                             senderId = currentUserId,
                                                             senderName = auth.currentUser?.displayName ?: auth.currentUser?.email ?: "User",
+                                                            senderImageUrl = auth.currentUser?.photoUrl?.toString() ?: "",
                                                             receiverId = receiverId,
                                                             receiverName = receiverName,
                                                             text = newMessageText.trim(),
@@ -344,14 +358,31 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
 }
 
 @Composable
-fun CityMessageBubble(message: Message, isCurrentUser: Boolean) {
+fun CityMessageBubble(message: Message, isCurrentUser: Boolean, onImageClick: (String) -> Unit = {}) {
     val dateFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
     val alignment = if (isCurrentUser) Alignment.End else Alignment.Start
 
-    Column(
+    Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalAlignment = alignment
+        horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
     ) {
+        if (!isCurrentUser) {
+            if (message.senderImageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = message.senderImageUrl,
+                    contentDescription = "Avatar",
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(CityTheme.Brown.copy(alpha=0.2f)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(CityTheme.Green), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Person, null, tint = CityTheme.White, modifier = Modifier.size(20.dp))
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+        }
+
         Box(
             modifier = Modifier
                 .widthIn(max = 260.dp)
@@ -371,7 +402,8 @@ fun CityMessageBubble(message: Message, isCurrentUser: Boolean) {
                             .fillMaxWidth()
                             .height(180.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(CityTheme.Brown.copy(alpha = 0.05f)),
+                            .background(CityTheme.Brown.copy(alpha = 0.05f))
+                            .clickable { onImageClick(message.imageUrl) },
                         contentScale = ContentScale.Crop
                     )
                     if (message.text.isNotBlank()) Spacer(Modifier.height(8.dp))
@@ -392,6 +424,22 @@ fun CityMessageBubble(message: Message, isCurrentUser: Boolean) {
                     color = if (isCurrentUser) CityTheme.White.copy(alpha = 0.6f) else CityTheme.Brown.copy(alpha = 0.4f),
                     modifier = Modifier.align(Alignment.End).padding(top = 2.dp)
                 )
+            }
+        }
+        
+        if (isCurrentUser) {
+            Spacer(Modifier.width(8.dp))
+            if (message.senderImageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = message.senderImageUrl,
+                    contentDescription = "Avatar",
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(CityTheme.Brown.copy(alpha=0.2f)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(CityTheme.Green), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Person, null, tint = CityTheme.White, modifier = Modifier.size(20.dp))
+                }
             }
         }
     }

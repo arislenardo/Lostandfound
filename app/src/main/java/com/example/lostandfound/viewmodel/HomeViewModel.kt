@@ -16,6 +16,8 @@ data class HomeUiState(
     val unreadMatches: Int = 0,
     val pendingClaims: Int = 0,
     val unreadClaimUpdates: Int = 0,
+    val profileImageUrl: String = "",
+    val role: String = "Resident"
 )
 
 class HomeViewModel : ViewModel() {
@@ -57,10 +59,20 @@ class HomeViewModel : ViewModel() {
                 db.collection("users").document(currentUser.uid).get()
                     .addOnSuccessListener { doc ->
                         val name = doc.getString("name")
+                        val photoUrl = doc.getString("profileImageUrl") ?: currentUser.photoUrl?.toString() ?: ""
+                        
+                        // Prioritize Admin status if AuthManager says so
+                        val documentRole = if (isAdmin) "Administrator" else (doc.getString("role") ?: "Resident")
+                        
+                        var updatedState = uiState.value.copy(
+                            profileImageUrl = photoUrl,
+                            role = documentRole
+                        )
                         if (!name.isNullOrBlank()) {
                             val first = name.split(" ").firstOrNull() ?: name
-                            uiState.value = uiState.value.copy(firstName = first)
+                            updatedState = updatedState.copy(firstName = first)
                         }
+                        uiState.value = updatedState
                     }
             }
         }

@@ -2,7 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
+    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
@@ -35,6 +35,7 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
     }
@@ -52,7 +53,8 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.play.services.location)
     implementation(libs.play.services.maps)
-    implementation(libs.maps.compose)
+    implementation("com.google.android.libraries.places:places:3.3.0")
+    implementation("com.google.maps.android:maps-compose:4.3.0") // ensure maps-compose uses a version that works well
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -74,4 +76,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
 }

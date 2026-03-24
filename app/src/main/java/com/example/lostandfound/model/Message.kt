@@ -6,6 +6,7 @@ data class Message(
     val id: String = "",
     val senderId: String = "",
     val senderName: String = "", // Added for easier display
+    val senderImageUrl: String = "", // Added for profile picture
     val receiverId: String = "",
     val receiverName: String = "", // Tracks the receiver's name for conversation lists
     val text: String = "",

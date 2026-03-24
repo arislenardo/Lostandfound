@@ -1,8 +1,12 @@
 package com.example.lostandfound.screens
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,16 +22,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.lostandfound.ui.theme.CityTheme
 import com.example.lostandfound.ui.theme.fieldColors
+import com.example.lostandfound.utils.uploadImageToStorage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,27 +52,44 @@ fun ProfileScreen(navController: NavController) {
     var email by remember { mutableStateOf(currentUser?.email ?: "") }
     var phone by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("Resident") }
+    var profileImageUrl by remember { mutableStateOf(currentUser?.photoUrl?.toString() ?: "") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    
     var isEditing by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
+    
+    val coroutineScope = rememberCoroutineScope()
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+        }
+    }
 
     LaunchedEffect(currentUser) {
         if (currentUser != null) {
             val isAdmin = com.example.lostandfound.data.AuthManager.isCurrentUserAdmin()
-            role = if (isAdmin) "Admin" else "Resident"
             
             db.collection("users").document(currentUser.uid).get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
                         name = document.getString("name") ?: currentUser.displayName ?: ""
-                        phone = document.getString("phoneNumber") ?: currentUser.phoneNumber ?: ""
+                        val rawPhone = document.getString("phoneNumber") ?: currentUser.phoneNumber ?: ""
+                        phone = if (rawPhone.startsWith("+63")) rawPhone.substring(3) else rawPhone
+                        role = if (isAdmin) "Admin" else (document.getString("role") ?: "Resident")
+                        profileImageUrl = document.getString("profileImageUrl") ?: currentUser.photoUrl?.toString() ?: ""
                         if (email.isBlank()) {
                             email = document.getString("email") ?: currentUser.email ?: ""
                         }
                     } else {
                         name = currentUser.displayName ?: ""
-                        phone = currentUser.phoneNumber ?: ""
+                        val rawPhone = currentUser.phoneNumber ?: ""
+                        phone = if (rawPhone.startsWith("+63")) rawPhone.substring(3) else rawPhone
+                        role = if (isAdmin) "Admin" else "Resident"
                         if (email.isBlank()) {
                             email = currentUser.email ?: ""
                         }
@@ -69,6 +97,7 @@ fun ProfileScreen(navController: NavController) {
                     isLoading = false
                 }
                 .addOnFailureListener {
+                    role = if (isAdmin) "Admin" else "Resident"
                     isLoading = false
                     Toast.makeText(context, "Failed to load profile", Toast.LENGTH_SHORT).show()
                 }
@@ -80,27 +109,54 @@ fun ProfileScreen(navController: NavController) {
     fun saveProfile() {
         if (currentUser == null) return
         isSaving = true
-        val updates = mapOf(
-            "name" to name,
-            "phoneNumber" to phone
-        )
-        db.collection("users").document(currentUser.uid)
-            .set(updates, com.google.firebase.firestore.SetOptions.merge())
-            .addOnSuccessListener {
-                // Sync name with Firebase Auth profile
-                val profileUpdates = UserProfileChangeRequest.Builder()
-                    .setDisplayName(name)
-                    .build()
-                currentUser.updateProfile(profileUpdates)
+        
+        coroutineScope.launch {
+            try {
+                var newImageUrl = profileImageUrl
+                if (selectedImageUri != null) {
+                    newImageUrl = uploadImageToStorage(selectedImageUri!!, currentUser.uid, currentUser.email ?: "anonymous", "profiles")
+                }
+                
+                // Consistency check for phone number
+                val cleanPhone = if (phone.startsWith("0")) phone.substring(1) else phone
+                val fullPhone = if (cleanPhone.startsWith("+63")) cleanPhone else "+63$cleanPhone"
+                
+                val updates = mapOf(
+                    "name" to name,
+                    "phoneNumber" to fullPhone,
+                    "profileImageUrl" to newImageUrl
+                )
+                
+                withContext(Dispatchers.Main) {
+                    db.collection("users").document(currentUser.uid)
+                        .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                        .addOnSuccessListener {
+                            // Sync name and photo with Firebase Auth profile
+                            val profileUpdates = UserProfileChangeRequest.Builder()
+                                .setDisplayName(name)
+                            if (newImageUrl.isNotBlank()) {
+                                profileUpdates.setPhotoUri(Uri.parse(newImageUrl))
+                            }
+                            currentUser.updateProfile(profileUpdates.build())
 
-                isSaving = false
-                isEditing = false
-                Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
+                            profileImageUrl = newImageUrl
+                            isSaving = false
+                            isEditing = false
+                            selectedImageUri = null
+                            Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
+                        }
+                        .addOnFailureListener {
+                            isSaving = false
+                            Toast.makeText(context, "Error updating profile", Toast.LENGTH_SHORT).show()
+                        }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isSaving = false
+                    Toast.makeText(context, "Image upload failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                }
             }
-            .addOnFailureListener {
-                isSaving = false
-                Toast.makeText(context, "Error updating profile", Toast.LENGTH_SHORT).show()
-            }
+        }
     }
 
     Scaffold(
@@ -167,15 +223,36 @@ fun ProfileScreen(navController: NavController) {
                         .size(100.dp)
                         .clip(CircleShape)
                         .background(CityTheme.Green)
-                        .border(4.dp, CityTheme.GoldLight, CircleShape),
+                        .border(4.dp, CityTheme.GoldLight, CircleShape)
+                        .clickable { if (isEditing) imagePickerLauncher.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile Avatar",
-                        tint = CityTheme.White,
-                        modifier = Modifier.size(60.dp)
-                    )
+                    if (selectedImageUri != null || profileImageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(selectedImageUri ?: profileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Profile Avatar",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile Avatar",
+                            tint = CityTheme.White,
+                            modifier = Modifier.size(60.dp)
+                        )
+                    }
+                    if (isEditing) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(CityTheme.Brown.copy(alpha = 0.4f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "Change Image", tint = CityTheme.White)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -232,10 +309,12 @@ fun ProfileScreen(navController: NavController) {
                             onValueChange = { if (isEditing) phone = it.filter { c -> c.isDigit() } },
                             label = { Text("Phone Number") },
                             enabled = isEditing,
+                            prefix = { Text("+63 ", color = CityTheme.Brown.copy(alpha = 0.5f)) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = fieldColors(),
                             shape = RoundedCornerShape(12.dp),
-                            singleLine = true
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone)
                         )
 
                         OutlinedTextField(
@@ -257,6 +336,7 @@ fun ProfileScreen(navController: NavController) {
                     Button(
                         onClick = {
                             isEditing = false
+                            selectedImageUri = null // Reset image changes
                         },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),

@@ -24,26 +24,9 @@ import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import android.app.Activity
-import com.example.lostandfound.ui.theme.CityTheme
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import com.example.lostandfound.ui.theme.ThemeConfig
-import com.example.lostandfound.ui.theme.LocalThemeConfig
 import com.example.lostandfound.ui.theme.LostandfoundTheme
 
 class MainActivity : ComponentActivity() {
@@ -62,23 +45,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+            val apiKey = appInfo.metaData?.getString("com.google.android.geo.API_KEY")
+            if (apiKey != null && !com.google.android.libraries.places.api.Places.isInitialized()) {
+                com.google.android.libraries.places.api.Places.initialize(applicationContext, apiKey)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         askNotificationPermission()
 
         setContent {
-            var isDark by remember { mutableStateOf(false) } // Default to Light for now
-            // Dynamic color removed as per request
-
-            val themeConfig = remember(isDark) {
-                ThemeConfig(
-                    isDark = isDark,
-                    toggleDark = { isDark = !isDark }
-                )
-            }
-
-            CompositionLocalProvider(LocalThemeConfig provides themeConfig) {
-                LostandfoundTheme(darkTheme = isDark) {
-                    LostAndFoundApp()
-                }
+            LostandfoundTheme {
+                LostAndFoundApp()
             }
         }
     }
@@ -112,15 +93,8 @@ fun LostAndFoundApp() {
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
-    var showResidencyPrompt by rememberSaveable { mutableStateOf(auth.currentUser == null) }
-    var showNonResidentNotice by rememberSaveable { mutableStateOf(false) }
-    val context = LocalContext.current
-
     LaunchedEffect(auth.currentUser) {
         AuthManager.fetchAdminUids()
-        if (auth.currentUser != null) {
-            showResidencyPrompt = false
-        }
         
         // Sync FCM Token
         auth.currentUser?.let { user ->
@@ -137,99 +111,6 @@ fun LostAndFoundApp() {
         }
     }
 
-    if (showResidencyPrompt) {
-        AlertDialog(
-            onDismissRequest = { /* Prevent dismissal by tapping outside */ },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = CityTheme.Cream,
-            title = {
-                Text(
-                    "Welcome to Balik-Calasiao",
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
-                    color = CityTheme.Green,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Are you a resident of Calasiao?",
-                        fontSize = 16.sp,
-                        color = CityTheme.Brown,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Only residents of Calasiao can use the platform directly.",
-                        fontSize = 12.sp,
-                        color = CityTheme.Brown.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showResidencyPrompt = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Yes, I am.")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { 
-                        showResidencyPrompt = false
-                        showNonResidentNotice = true 
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                ) {
-                    Text("No, I'm not.", color = CityTheme.Error)
-                }
-            }
-        )
-    }
-
-    if (showNonResidentNotice) {
-        AlertDialog(
-            onDismissRequest = { /* Prevent dismissal */ },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = CityTheme.White,
-            title = {
-                Text(
-                    "Notice for Non-Residents",
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
-                    color = CityTheme.Error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            text = {
-                Text(
-                    "Non-Calasiao residents must immediately surrender any found items directly to the Calasiao Police Station. You cannot use the app to report lost or found items.",
-                    fontSize = 14.sp,
-                    color = CityTheme.Brown,
-                    textAlign = TextAlign.Center
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { 
-                        (context as? Activity)?.finishAffinity() // Exit App
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Exit App")
-                }
-            }
-        )
-    }
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable("login") { LoginScreen(navController) }

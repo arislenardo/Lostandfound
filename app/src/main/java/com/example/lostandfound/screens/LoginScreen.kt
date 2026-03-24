@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -114,10 +116,21 @@ fun LoginScreen(navController: NavController) {
     var isProfileSetupStep by remember { mutableStateOf(false) }
     var profileName        by remember { mutableStateOf("") }
     var profileEmail       by remember { mutableStateOf("") }
+    var role               by remember { mutableStateOf("Resident") }
+    var address            by remember { mutableStateOf("") }
+    var expandedBarangay   by remember { mutableStateOf(false) }
+    val calasiaoBarangays = listOf(
+        "Ambonao", "Ambuetel", "Banaoang", "Bued", "Buenlag", "Cabilocaan", "Dinalaoan", "Doyong", "Gabon", "Lasip", "Longos", "Lumbang", "Macabito", "Malabago", "Mancup", "Nagsaing", "Nalsian", "Poblacion East", "Poblacion West", "Quesban", "San Miguel", "San Vicente", "Songkoy", "Talibaew"
+    )
 
     val auth    = FirebaseAuth.getInstance()
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
+
+    val phLocations by remember { mutableStateOf(loadPhLocations(context)) }
+    var expandedProvince by remember { mutableStateOf(false) }
+    var expandedCity by remember { mutableStateOf(false) }
+    var selectedProvince by remember { mutableStateOf("") }
 
     // Google Sign-In
     @Suppress("DEPRECATION")
@@ -140,19 +153,17 @@ fun LoginScreen(navController: NavController) {
                         scope.launch {
                             val user = auth.currentUser
                             if (user != null) {
-                                val userData = hashMapOf(
-                                    "uid" to user.uid,
-                                    "email" to (user.email ?: ""),
-                                    "name" to (user.displayName ?: ""),
-                                    "phoneNumber" to (user.phoneNumber ?: "")
-                                )
-                                FirebaseFirestore.getInstance()
-                                    .collection("users").document(user.uid)
-                                    .set(userData, com.google.firebase.firestore.SetOptions.merge())
-                                    .await()
+                                val docMap = FirebaseFirestore.getInstance().collection("users").document(user.uid).get().await()
+                                if (docMap.exists() && docMap.getString("role") != null) {
+                                    AuthManager.refreshAdminStatus()
+                                    syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
+                                } else {
+                                    isProfileSetupStep = true
+                                    profileName = user.displayName ?: ""
+                                    profileEmail = user.email ?: ""
+                                    isLoading = false
+                                }
                             }
-                            AuthManager.refreshAdminStatus()
-                            syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                         }
                     }
                     .addOnFailureListener { e ->
@@ -394,9 +405,194 @@ fun LoginScreen(navController: NavController) {
                                     shape = RoundedCornerShape(12.dp),
                                     leadingIcon = { Icon(Icons.Filled.Lock, null) }
                                 )
+                                Spacer(Modifier.height(14.dp))
+                                Text("Are you a resident of Calasiao?", fontSize = 14.sp, color = CityBrown, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    RoleSelectionCard(
+                                        modifier = Modifier.weight(1f),
+                                        label = "Resident",
+                                        subLabel = "Calasiao",
+                                        icon = Icons.Filled.Home,
+                                        selected = role == "Resident",
+                                        onClick = { role = "Resident"; address = ""; selectedProvince = "" }
+                                    )
+                                    RoleSelectionCard(
+                                        modifier = Modifier.weight(1f),
+                                        label = "Non-resident",
+                                        subLabel = "Visitor",
+                                        icon = Icons.Filled.TravelExplore,
+                                        selected = role == "Non-resident",
+                                        onClick = { role = "Non-resident"; address = ""; selectedProvince = "" }
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                if (role == "Resident") {
+                                    ExposedDropdownMenuBox(
+                                        expanded = expandedBarangay,
+                                        onExpandedChange = { expandedBarangay = !expandedBarangay }
+                                    ) {
+                                        OutlinedTextField(
+                                            value = address,
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("Barangay") },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBarangay) },
+                                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = fieldColors
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = expandedBarangay,
+                                            onDismissRequest = { expandedBarangay = false }
+                                        ) {
+                                            calasiaoBarangays.forEach { bgy ->
+                                                DropdownMenuItem(
+                                                    text = { Text(bgy) },
+                                                    onClick = { address = bgy; expandedBarangay = false }
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Province Dropdown
+                                    ExposedDropdownMenuBox(
+                                        expanded = expandedProvince,
+                                        onExpandedChange = { expandedProvince = !expandedProvince }
+                                    ) {
+                                        OutlinedTextField(
+                                            value = selectedProvince,
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("Province") },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProvince) },
+                                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = fieldColors
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = expandedProvince,
+                                            onDismissRequest = { expandedProvince = false },
+                                            modifier = Modifier.heightIn(max = 250.dp)
+                                        ) {
+                                            phLocations.keys.forEach { prov ->
+                                                DropdownMenuItem(
+                                                    text = { Text(prov) },
+                                                    onClick = { 
+                                                        selectedProvince = prov
+                                                        address = "" 
+                                                        expandedProvince = false 
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (selectedProvince.isNotEmpty()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        // City Dropdown
+                                        ExposedDropdownMenuBox(
+                                            expanded = expandedCity,
+                                            onExpandedChange = { expandedCity = !expandedCity }
+                                        ) {
+                                            OutlinedTextField(
+                                                value = address.substringBefore(","),
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text("City/Municipality") },
+                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCity) },
+                                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = fieldColors
+                                            )
+                                            val cities = phLocations[selectedProvince] ?: emptyList()
+                                            ExposedDropdownMenu(
+                                                expanded = expandedCity,
+                                                onDismissRequest = { expandedCity = false },
+                                                modifier = Modifier.heightIn(max = 250.dp)
+                                            ) {
+                                                cities.forEach { city ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(city) },
+                                                        onClick = { 
+                                                            address = "$city, $selectedProvince"
+                                                            expandedCity = false 
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                         } else {  // Phone tab
+                            if (!isLoginMode) {
+                                OutlinedTextField(
+                                    value = profileName, onValueChange = { profileName = it; isErrorVisible = false },
+                                    label = { Text("Full Name") },
+                                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                    isError = isErrorVisible, colors = fieldColors, shape = RoundedCornerShape(12.dp), leadingIcon = { Icon(Icons.Filled.Person, null) }
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                OutlinedTextField(
+                                    value = profileEmail, onValueChange = { profileEmail = it; isErrorVisible = false },
+                                    label = { Text("Email (optional)") },
+                                    modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                    colors = fieldColors, shape = RoundedCornerShape(12.dp), leadingIcon = { Icon(Icons.Filled.Email, null) }
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Note: Without an email, you will not receive status updates or notifications via email.",
+                                    fontSize = 11.sp, color = CityBrown.copy(alpha = 0.6f), lineHeight = 14.sp, modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                Text("Are you a resident of Calasiao?", fontSize = 14.sp, color = CityBrown, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    RoleSelectionCard(modifier = Modifier.weight(1f), label = "Resident", subLabel = "Calasiao", icon = Icons.Filled.Home, selected = role == "Resident", onClick = { role = "Resident"; address = ""; selectedProvince = "" })
+                                    RoleSelectionCard(modifier = Modifier.weight(1f), label = "Non-resident", subLabel = "Visitor", icon = Icons.Filled.TravelExplore, selected = role == "Non-resident", onClick = { role = "Non-resident"; address = ""; selectedProvince = "" })
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                if (role == "Resident") {
+                                    ExposedDropdownMenuBox(expanded = expandedBarangay, onExpandedChange = { expandedBarangay = !expandedBarangay }) {
+                                        OutlinedTextField(
+                                            value = address, onValueChange = {}, readOnly = true, label = { Text("Barangay") },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBarangay) }, modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = fieldColors
+                                        )
+                                        ExposedDropdownMenu(expanded = expandedBarangay, onDismissRequest = { expandedBarangay = false }) {
+                                            calasiaoBarangays.forEach { bgy -> DropdownMenuItem(text = { Text(bgy) }, onClick = { address = bgy; expandedBarangay = false }) }
+                                        }
+                                    }
+                                } else {
+                                    ExposedDropdownMenuBox(expanded = expandedProvince, onExpandedChange = { expandedProvince = !expandedProvince }) {
+                                        OutlinedTextField(
+                                            value = selectedProvince, onValueChange = {}, readOnly = true, label = { Text("Province") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProvince) }, modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = fieldColors
+                                        )
+                                        ExposedDropdownMenu(expanded = expandedProvince, onDismissRequest = { expandedProvince = false }, modifier = Modifier.heightIn(max = 250.dp)) {
+                                            phLocations.keys.forEach { prov -> DropdownMenuItem(text = { Text(prov) }, onClick = { selectedProvince = prov; address = ""; expandedProvince = false }) }
+                                        }
+                                    }
+                                    if (selectedProvince.isNotEmpty()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        ExposedDropdownMenuBox(expanded = expandedCity, onExpandedChange = { expandedCity = !expandedCity }) {
+                                            OutlinedTextField(
+                                                value = address.substringBefore(","), onValueChange = {}, readOnly = true, label = { Text("City/Municipality") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCity) }, modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = fieldColors
+                                            )
+                                            val cities = phLocations[selectedProvince] ?: emptyList()
+                                            ExposedDropdownMenu(expanded = expandedCity, onDismissRequest = { expandedCity = false }, modifier = Modifier.heightIn(max = 250.dp)) {
+                                                cities.forEach { city -> DropdownMenuItem(text = { Text(city) }, onClick = { address = "$city, $selectedProvince"; expandedCity = false }) }
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(14.dp))
+                            }
                             OutlinedTextField(
                                 value = phone,
                                 onValueChange = { phone = it.filter { c -> c.isDigit() }; isErrorVisible = false },
@@ -417,7 +613,7 @@ fun LoginScreen(navController: NavController) {
                         // Profile setup after phone OTP
                         OutlinedTextField(
                             value = profileName, onValueChange = { profileName = it; isErrorVisible = false },
-                            label = { Text("Full Name *") },
+                            label = { Text("Full Name") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             isError = isErrorVisible,
@@ -436,6 +632,129 @@ fun LoginScreen(navController: NavController) {
                             shape = RoundedCornerShape(12.dp),
                             leadingIcon = { Icon(Icons.Filled.Email, null) }
                         )
+
+                        Spacer(Modifier.height(14.dp))
+                        Text("Are you a resident of Calasiao?", fontSize = 14.sp, color = CityBrown, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            RoleSelectionCard(
+                                modifier = Modifier.weight(1f),
+                                label = "Resident",
+                                subLabel = "Calasiao",
+                                icon = Icons.Filled.Home,
+                                selected = role == "Resident",
+                                onClick = { role = "Resident"; address = ""; selectedProvince = "" }
+                            )
+                            RoleSelectionCard(
+                                modifier = Modifier.weight(1f),
+                                label = "Non-resident",
+                                subLabel = "Visitor",
+                                icon = Icons.Filled.TravelExplore,
+                                selected = role == "Non-resident",
+                                onClick = { role = "Non-resident"; address = ""; selectedProvince = "" }
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        if (role == "Resident") {
+                            ExposedDropdownMenuBox(
+                                expanded = expandedBarangay,
+                                onExpandedChange = { expandedBarangay = !expandedBarangay }
+                            ) {
+                                OutlinedTextField(
+                                    value = address,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Barangay") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBarangay) },
+                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = fieldColors
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = expandedBarangay,
+                                    onDismissRequest = { expandedBarangay = false }
+                                ) {
+                                    calasiaoBarangays.forEach { bgy ->
+                                        DropdownMenuItem(
+                                            text = { Text(bgy) },
+                                            onClick = { address = bgy; expandedBarangay = false }
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Province Dropdown
+                            ExposedDropdownMenuBox(
+                                expanded = expandedProvince,
+                                onExpandedChange = { expandedProvince = !expandedProvince }
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedProvince,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Province") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProvince) },
+                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = fieldColors
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = expandedProvince,
+                                    onDismissRequest = { expandedProvince = false },
+                                    modifier = Modifier.heightIn(max = 250.dp)
+                                ) {
+                                    phLocations.keys.forEach { prov ->
+                                        DropdownMenuItem(
+                                            text = { Text(prov) },
+                                            onClick = { 
+                                                selectedProvince = prov
+                                                address = "" 
+                                                expandedProvince = false 
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (selectedProvince.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                // City Dropdown
+                                ExposedDropdownMenuBox(
+                                    expanded = expandedCity,
+                                    onExpandedChange = { expandedCity = !expandedCity }
+                                ) {
+                                    OutlinedTextField(
+                                        value = address.substringBefore(","),
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("City/Municipality") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCity) },
+                                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = fieldColors
+                                    )
+                                    val cities = phLocations[selectedProvince] ?: emptyList()
+                                    ExposedDropdownMenu(
+                                        expanded = expandedCity,
+                                        onDismissRequest = { expandedCity = false },
+                                        modifier = Modifier.heightIn(max = 250.dp)
+                                    ) {
+                                        cities.forEach { city ->
+                                            DropdownMenuItem(
+                                                text = { Text(city) },
+                                                onClick = { 
+                                                    address = "$city, $selectedProvince"
+                                                    expandedCity = false 
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                     } else {  // OTP entry
 
@@ -482,6 +801,8 @@ fun LoginScreen(navController: NavController) {
                                         isLoading = false; errorMessage = "Please enter your name."; isErrorVisible = true
                                     } else if (profileEmail.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(profileEmail).matches()) {
                                         isLoading = false; errorMessage = "Please enter a valid email address."; isErrorVisible = true
+                                    } else if (address.isBlank()) {
+                                        isLoading = false; errorMessage = "Please select or enter your address."; isErrorVisible = true
                                     } else {
                                         scope.launch {
                                             try {
@@ -492,8 +813,10 @@ fun LoginScreen(navController: NavController) {
                                                 val userData = hashMapOf(
                                                     "name"  to profileName,
                                                     "email" to profileEmail,
-                                                    "phone" to user.phoneNumber,
-                                                    "uid"   to user.uid
+                                                    "phoneNumber" to user.phoneNumber,
+                                                    "uid"   to user.uid,
+                                                    "role"  to role,
+                                                    "address" to address
                                                 )
                                                 FirebaseFirestore.getInstance()
                                                     .collection("users").document(user.uid)
@@ -510,23 +833,36 @@ fun LoginScreen(navController: NavController) {
                                         val credential = PhoneAuthProvider.getCredential(verificationId, otpCode)
                                         auth.signInWithCredential(credential)
                                             .addOnSuccessListener { authResult ->
-                                                if (authResult.additionalUserInfo?.isNewUser == true) {
-                                                    isLoading = false; isProfileSetupStep = true
-                                                } else {
-                                                    scope.launch {
-                                                        val user = auth.currentUser
-                                                        if (user != null) {
-                                                            val userData = hashMapOf(
-                                                                "uid" to user.uid,
-                                                                "phoneNumber" to (user.phoneNumber ?: "")
-                                                            )
-                                                            FirebaseFirestore.getInstance()
-                                                                .collection("users").document(user.uid)
-                                                                .set(userData, com.google.firebase.firestore.SetOptions.merge())
-                                                                .await()
+                                                scope.launch {
+                                                    val user = authResult.user
+                                                    if (user != null) {
+                                                        val docMap = FirebaseFirestore.getInstance().collection("users").document(user.uid).get().await()
+                                                        if (docMap.exists() && docMap.getString("role") != null) {
+                                                            AuthManager.refreshAdminStatus()
+                                                            syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
+                                                        } else {
+                                                            if (!isLoginMode && profileName.isNotBlank() && address.isNotBlank()) {
+                                                                val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(profileName).build()
+                                                                user.updateProfile(profileUpdates).await()
+                                                                val userData = hashMapOf(
+                                                                    "name"  to profileName,
+                                                                    "email" to profileEmail,
+                                                                    "phoneNumber" to user.phoneNumber,
+                                                                    "uid"   to user.uid,
+                                                                    "role"  to role,
+                                                                    "address" to address
+                                                                )
+                                                                FirebaseFirestore.getInstance().collection("users").document(user.uid).set(userData).await()
+                                                                AuthManager.refreshAdminStatus()
+                                                                syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
+                                                            } else {
+                                                                isLoading = false; isProfileSetupStep = true
+                                                                profileName = user.displayName ?: ""
+                                                                profileEmail = user.email ?: ""
+                                                            }
                                                         }
-                                                        AuthManager.refreshAdminStatus()
-                                                        syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
+                                                    } else {
+                                                        isLoading = false; errorMessage = "Authentication failed."; isErrorVisible = true
                                                     }
                                                 }
                                             }
@@ -565,6 +901,8 @@ fun LoginScreen(navController: NavController) {
                                                 isLoading = false; errorMessage = "Please enter your name."; isErrorVisible = true
                                             } else if (password != confirmPassword) {
                                                 isLoading = false; errorMessage = context.getString(R.string.error_password_mismatch); isErrorVisible = true
+                                            } else if (address.isBlank()) {
+                                                isLoading = false; errorMessage = "Please select or enter your address."; isErrorVisible = true
                                             } else {
                                                 auth.createUserWithEmailAndPassword(email, password)
                                                     .addOnSuccessListener { result ->
@@ -576,7 +914,9 @@ fun LoginScreen(navController: NavController) {
                                                                     val userData = hashMapOf(
                                                                         "uid" to user.uid,
                                                                         "name" to name,
-                                                                        "email" to email
+                                                                        "email" to email,
+                                                                        "role" to role,
+                                                                        "address" to address
                                                                     )
                                                                     FirebaseFirestore.getInstance()
                                                                         .collection("users").document(user.uid)
@@ -598,6 +938,15 @@ fun LoginScreen(navController: NavController) {
                                     }
                                 } else {
                                     if (phone.isNotBlank()) {
+                                        if (!isLoginMode) {
+                                            if (profileName.isBlank()) {
+                                                isLoading = false; errorMessage = "Please enter your name."; isErrorVisible = true
+                                                return@Button
+                                            } else if (address.isBlank()) {
+                                                isLoading = false; errorMessage = "Please select or enter your address."; isErrorVisible = true
+                                                return@Button
+                                            }
+                                        }
                                         val activity = context.findActivity()
                                         if (activity == null) {
                                             isLoading = false; errorMessage = "Could not find activity context"; isErrorVisible = true
@@ -614,10 +963,23 @@ fun LoginScreen(navController: NavController) {
                                                             scope.launch {
                                                                 val user = auth.currentUser
                                                                 if (user != null) {
-                                                                    val userData = hashMapOf(
-                                                                        "uid" to user.uid,
-                                                                        "phoneNumber" to (user.phoneNumber ?: fullPhoneNumber)
-                                                                    )
+                                                                    val userData = if (!isLoginMode && profileName.isNotBlank() && address.isNotBlank()) {
+                                                                        val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(profileName).build()
+                                                                        user.updateProfile(profileUpdates).await()
+                                                                        hashMapOf(
+                                                                            "uid" to user.uid,
+                                                                            "name"  to profileName,
+                                                                            "email" to profileEmail,
+                                                                            "phoneNumber" to (user.phoneNumber ?: fullPhoneNumber),
+                                                                            "role"  to role,
+                                                                            "address" to address
+                                                                        )
+                                                                    } else {
+                                                                        hashMapOf(
+                                                                            "uid" to user.uid,
+                                                                            "phoneNumber" to (user.phoneNumber ?: fullPhoneNumber)
+                                                                        )
+                                                                    }
                                                                     FirebaseFirestore.getInstance()
                                                                         .collection("users").document(user.uid)
                                                                         .set(userData, com.google.firebase.firestore.SetOptions.merge())
@@ -731,8 +1093,80 @@ fun LoginScreen(navController: NavController) {
     }
 }
 
+@Composable
+fun RoleSelectionCard(
+    modifier: Modifier = Modifier,
+    label: String,
+    subLabel: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(100.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) CityGreen.copy(alpha = 0.08f) else Color.White,
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) CityGreen else CityBrown.copy(alpha = 0.15f)
+        ),
+        tonalElevation = if (selected) 2.dp else 0.dp
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) CityGreen else CityBrown.copy(alpha = 0.5f),
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) CityGreen else CityBrown,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = subLabel,
+                fontSize = 11.sp,
+                color = if (selected) CityGreen.copy(alpha = 0.7f) else CityBrown.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center,
+                lineHeight = 12.sp
+            )
+        }
+    }
+}
+
 fun Context.findActivity(): Activity? = when (this) {
     is Activity      -> this
     is ContextWrapper -> baseContext.findActivity()
     else             -> null
+}
+
+fun loadPhLocations(context: Context): Map<String, List<String>> {
+    val map = mutableMapOf<String, List<String>>()
+    try {
+        val inputStream = context.resources.openRawResource(R.raw.ph_locations)
+        val jsonString = inputStream.bufferedReader().use { it.readText() }
+        val jsonObject = org.json.JSONObject(jsonString)
+        val keys = jsonObject.keys()
+        while (keys.hasNext()) {
+            val province = keys.next()
+            val citiesArray = jsonObject.getJSONArray(province)
+            val citiesList = mutableListOf<String>()
+            for (i in 0 until citiesArray.length()) {
+                citiesList.add(citiesArray.getString(i))
+            }
+            map[province] = citiesList.sorted()
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return map.toSortedMap()
 }

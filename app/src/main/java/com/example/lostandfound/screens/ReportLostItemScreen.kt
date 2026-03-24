@@ -60,6 +60,7 @@ import com.example.lostandfound.utils.uploadImageToStorage
 import com.example.lostandfound.utils.getReadableAddress
 import com.example.lostandfound.utils.TFLiteClassifier
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import coil.compose.AsyncImage
@@ -281,6 +282,32 @@ fun ReportLostItemScreen(navController: NavController) {
         }
     }
 
+    val placesLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            result.data?.let { intent ->
+                val place = com.google.android.libraries.places.widget.Autocomplete.getPlaceFromIntent(intent)
+                location = place.name ?: ""
+                latitude = place.latLng?.latitude
+                longitude = place.latLng?.longitude
+                coroutineScope.launch {
+                    if (latitude != null && longitude != null) {
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newLatLngZoom(LatLng(latitude!!, longitude!!), 16f)
+                        )
+                    }
+                }
+            }
+        } else if (result.resultCode == 2) {
+            result.data?.let { intent ->
+                val status = com.google.android.libraries.places.widget.Autocomplete.getStatusFromIntent(intent)
+                Toast.makeText(context, "Places API Error: ${status.statusMessage}", Toast.LENGTH_LONG).show()
+                android.util.Log.e("PlacesError", "Error: ${status.statusMessage}")
+            }
+        }
+    }
+
     var savedLostItemId by remember { mutableStateOf<String?>(null) }
 
     fun saveToFirestore(imageUrl: String?, onComplete: ((String) -> Unit)? = null) {
@@ -329,6 +356,16 @@ fun ReportLostItemScreen(navController: NavController) {
                     )
                     db.collection("match_notifications").add(matchNotif).addOnSuccessListener { ref ->
                         ref.update("id", ref.id)
+                        
+                        // --- NEW: TRIGGER EMAIL NOTIFICATION ---
+                        if (foundItem.email.isNotBlank()) {
+                            com.example.lostandfound.data.EmailService.sendMatchNotification(
+                                userEmail = foundItem.email,
+                                itemName = foundItem.name,
+                                matchType = "Lost Item"
+                            )
+                        }
+                        // ----------------------------------------
                     }
                 }
 
@@ -922,12 +959,34 @@ fun ReportLostItemScreen(navController: NavController) {
                             Text("Location", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = CityTheme.Green, letterSpacing = 0.8.sp)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
+
+
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
                                 value = location,
                                 onValueChange = { location = it },
                                 label = { Text(stringResource(R.string.location_label)) },
                                 modifier = Modifier.weight(1f),
+                                trailingIcon = {
+                                    IconButton(onClick = {
+                                        try {
+                                            val fields = listOf(
+                                                com.google.android.libraries.places.api.model.Place.Field.ID,
+                                                com.google.android.libraries.places.api.model.Place.Field.NAME,
+                                                com.google.android.libraries.places.api.model.Place.Field.LAT_LNG
+                                            )
+                                            val intent = com.google.android.libraries.places.widget.Autocomplete.IntentBuilder(
+                                                com.google.android.libraries.places.widget.model.AutocompleteActivityMode.OVERLAY, fields
+                                            ).build(context)
+                                            placesLauncher.launch(intent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Search not available", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }) {
+                                        Icon(androidx.compose.material.icons.Icons.Default.Search, "Search Place")
+                                    }
+                                },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = CityTheme.Green,

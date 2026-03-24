@@ -2,6 +2,7 @@ package com.example.lostandfound.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.example.lostandfound.components.FullScreenImageDialog
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.AdminAction
 import com.example.lostandfound.model.LostItem
@@ -56,6 +58,11 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
         position = CameraPosition.fromLatLngZoom(LatLng(16.0359, 120.3601), 15f)
     }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showFullScreenImage by remember { mutableStateOf<String?>(null) }
+
+    showFullScreenImage?.let { url ->
+        FullScreenImageDialog(url) { showFullScreenImage = null }
+    }
 
     LaunchedEffect(itemId) {
         db.collection("lost_items").document(itemId).get()
@@ -214,7 +221,7 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                 // Image
                 if (item!!.imageUrl.isNotBlank() && !isEditing) {
                     Card(
-                        Modifier.fillMaxWidth().height(200.dp),
+                        Modifier.fillMaxWidth().height(200.dp).clickable { showFullScreenImage = item!!.imageUrl },
                         RoundedCornerShape(16.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {

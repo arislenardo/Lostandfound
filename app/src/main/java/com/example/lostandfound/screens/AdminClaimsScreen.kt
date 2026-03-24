@@ -93,6 +93,16 @@ fun AdminClaimsScreen(navController: NavController) {
                 )
                 db.collection("claim_notifications").add(notification).addOnSuccessListener { ref ->
                     ref.update("id", ref.id)
+                    
+                    // --- NEW: TRIGGER EMAIL NOTIFICATION ---
+                    if (claim.userEmail.isNotBlank()) {
+                        com.example.lostandfound.data.EmailService.sendClaimStatusNotification(
+                            userEmail = claim.userEmail,
+                            itemName = claim.itemName,
+                            status = newStatus
+                        )
+                    }
+                    // ----------------------------------------
                 }
 
                 // 2. Log the action

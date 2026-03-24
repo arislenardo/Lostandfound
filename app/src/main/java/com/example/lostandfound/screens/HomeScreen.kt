@@ -1,6 +1,9 @@
 package com.example.lostandfound.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -8,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
@@ -26,6 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
@@ -47,6 +55,7 @@ fun HomeScreen(navController: NavController) {
     val unreadMatches = state.unreadMatches
     val pendingClaims = state.pendingClaims
     val unreadClaimUpdates = state.unreadClaimUpdates
+    val profileImageUrl = state.profileImageUrl
 
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -90,54 +99,58 @@ fun HomeScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            "Balik-Calasiao",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp,
-                            color = CityTheme.White
-                        )
-                        Text(
-                            "Station Dashboard",
-                            fontSize = 11.sp,
-                            color = CityTheme.GoldLight
-                        )
-                    }
-                },
-                actions = {
-                    // Notification bell with badge
-                    BadgedBox(
-                        badge = {
-                            if (notifCount > 0) {
-                                Badge(containerColor = CityTheme.Gold) {
-                                    Text(
-                                        if (notifCount > 9) "9+" else "$notifCount",
-                                        fontSize = 10.sp,
-                                        color = CityTheme.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        IconButton(onClick = {
-                            navController.navigate("notification_inbox")
-                        }) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                contentDescription = "Notifications",
-                                tint = CityTheme.White
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "BALIK-CALASIAO",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                letterSpacing = 1.5.sp,
+                                color = CityTheme.White
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 2.dp)
+                                    .height(2.dp)
+                                    .width(40.dp)
+                                    .background(CityTheme.GoldLight, RoundedCornerShape(1.dp))
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = CityTheme.Green
+                    },
+                    actions = {
+                        // Notification bell with badge
+                        BadgedBox(
+                            badge = {
+                                if (notifCount > 0) {
+                                    Badge(
+                                        containerColor = CityTheme.Gold,
+                                        contentColor = CityTheme.White,
+                                        modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                                    ) {
+                                        Text(
+                                            if (notifCount > 9) "9+" else "$notifCount",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            },
+                        ) {
+                            IconButton(onClick = { navController.navigate("notification_inbox") }) {
+                                Icon(Icons.Default.Notifications, null, tint = CityTheme.White)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent
+                    )
                 )
-            )
+            }
         },
         bottomBar = {
             AppBottomNavigation(
@@ -160,47 +173,85 @@ fun HomeScreen(navController: NavController) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .padding(bottom = 24.dp)
+                    .shadow(12.dp, RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Brush.horizontalGradient(listOf(CityTheme.Green, CityTheme.GreenLight)))
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(CityTheme.Green, CityTheme.GreenLight)
+                            )
+                        )
+                        .padding(horizontal = 24.dp, vertical = 24.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(CircleShape)
-                                .background(CityTheme.Gold),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            modifier = Modifier.size(64.dp),
+                            shape = CircleShape,
+                            color = CityTheme.White.copy(alpha = 0.15f),
+                            border = BorderStroke(2.dp, Brush.linearGradient(listOf(CityTheme.GoldLight, CityTheme.Gold)))
                         ) {
-                            Icon(Icons.Default.Person, null, tint = CityTheme.White, modifier = Modifier.size(26.dp))
+                            Box(contentAlignment = Alignment.Center) {
+                                if (profileImageUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(profileImageUrl)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "Profile Picture",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Person, null, tint = CityTheme.White, modifier = Modifier.size(36.dp))
+                                }
+                            }
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(18.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Hello, $firstName",
-                                fontSize = 17.sp,
+                                "MABUHAY,",
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = CityTheme.White
+                                letterSpacing = 1.sp,
+                                color = CityTheme.GoldLight.copy(alpha = 0.9f)
                             )
                             Text(
-                                if (isAdmin) "Administrator" else "Resident",
-                                fontSize = 12.sp,
-                                color = CityTheme.GoldLight
+                                "$firstName",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = CityTheme.White
                             )
+                            Surface(
+                                color = CityTheme.White.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) {
+                                Text(
+                                    state.role.uppercase(),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    color = CityTheme.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                         // Logout link
-                        TextButton(onClick = { showLogoutDialog = true }) {
-                            Text("Log out", color = CityTheme.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                        IconButton(
+                            onClick = { showLogoutDialog = true }, 
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(CityTheme.White.copy(alpha = 0.1f), CircleShape)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, "Log Out", tint = CityTheme.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }

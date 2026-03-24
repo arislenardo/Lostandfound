@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.example.lostandfound.components.FullScreenImageDialog
 import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.model.AdminAction
 import com.example.lostandfound.model.Claim
@@ -77,6 +78,11 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
     var selectedClaimImageUri by remember { mutableStateOf<Uri?>(null) }
     var showReturnConfirm by remember { mutableStateOf(false) }
     var showWithdrawConfirm by remember { mutableStateOf(false) }
+    var showFullScreenImage by remember { mutableStateOf<String?>(null) }
+
+    showFullScreenImage?.let { url ->
+        FullScreenImageDialog(url) { showFullScreenImage = null }
+    }
 
     val claimImagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -236,7 +242,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                 // Image banner
                 if (item!!.imageUrl.isNotBlank() && !isEditing) {
                     Card(
-                        Modifier.fillMaxWidth().height(200.dp),
+                        Modifier.fillMaxWidth().height(200.dp).clickable { showFullScreenImage = item!!.imageUrl },
                         RoundedCornerShape(16.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
