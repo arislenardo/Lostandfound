@@ -284,8 +284,23 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                                                             timestamp = Date()
                                                         )
 
-                                                        ChatManager.sendMessage(msg,
+                                                        ChatManager.sendMessage(
+                                                            message = msg,
+                                                            skipEmail = !isAdmin,
                                                             onSuccess = { 
+                                                                // --- TRIGGER EMAIL NOTIFICATION TO ADMIN IF CITIZEN SENDS ---
+                                                                if (!isAdmin) {
+                                                                    com.example.lostandfound.data.EmailService.sendTargetedAdminNotification(
+                                                                        adminUid = receiverId,
+                                                                        type = "CITIZEN REPLY/DISPUTE",
+                                                                        itemName = "Ongoing Thread",
+                                                                        reporterName = auth.currentUser?.displayName ?: "Citizen",
+                                                                        reporterEmail = auth.currentUser?.email ?: "Unknown",
+                                                                        details = "A citizen is responding to your message: ${newMessageText.trim()}"
+                                                                    )
+                                                                }
+                                                                // ------------------------------------------------------------
+                                                                
                                                                 newMessageText = ""
                                                                 selectedImageUri = null
                                                                 isSending = false
@@ -333,16 +348,21 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                                     text = "The session has been concluded. Thank you.",
                                     timestamp = Date()
                                 )
-                                ChatManager.sendMessage(closingMsg, { 
-                                    // Write to closed_chats collection
-                                    db.collection("closed_chats").document(chatId).set(mapOf("closed" to true))
-                                        .addOnSuccessListener {
-                                            showEndChatDialog = false
-                                            Toast.makeText(context, "Session Concluded", Toast.LENGTH_SHORT).show()
-                                        }
-                                }, {
-                                    Toast.makeText(context, "Failed to send closing message", Toast.LENGTH_SHORT).show()
-                                })
+                                ChatManager.sendMessage(
+                                    message = closingMsg,
+                                    skipEmail = true, // We don't want an email for the closing message
+                                    onSuccess = { 
+                                        // Write to closed_chats collection
+                                        db.collection("closed_chats").document(chatId).set(mapOf("closed" to true))
+                                            .addOnSuccessListener {
+                                                showEndChatDialog = false
+                                                Toast.makeText(context, "Session Concluded", Toast.LENGTH_SHORT).show()
+                                            }
+                                    },
+                                    onFailure = { 
+                                        Toast.makeText(context, "Failed to send closing message", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Gold)
                         ) { Text("Send & End", color = CityTheme.White) }

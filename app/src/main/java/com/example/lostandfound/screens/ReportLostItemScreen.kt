@@ -338,6 +338,16 @@ fun ReportLostItemScreen(navController: NavController) {
             .addOnSuccessListener { lostItemRef ->
                 val lostId = lostItemRef.id
                 lostItemRef.update("id", lostId)
+                
+                // --- NEW: TRIGGER ADMIN NOTIFICATION ---
+                com.example.lostandfound.data.EmailService.sendAdminNotification(
+                    type = "LOST ITEM REPORT",
+                    itemName = itemName,
+                    reporterName = currentUser?.displayName ?: "Citizen",
+                    reporterEmail = currentUser?.email ?: "Unknown",
+                    details = "A new lost item '$itemName' has been reported. Help matching this item with found records."
+                )
+                // ----------------------------------------
                 savedLostItemId = lostId
 
                 // 1. Persist potential matches as notifications
@@ -359,7 +369,7 @@ fun ReportLostItemScreen(navController: NavController) {
                         
                         // --- NEW: TRIGGER EMAIL NOTIFICATION ---
                         if (foundItem.email.isNotBlank()) {
-                            com.example.lostandfound.data.EmailService.sendMatchNotification(
+                            com.example.lostandfound.data.EmailService.sendSmartMatchNotification(
                                 userEmail = foundItem.email,
                                 itemName = foundItem.name,
                                 matchType = "Lost Item"

@@ -585,6 +585,16 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                                     withContext(Dispatchers.Main) {
                                                         db.collection("claims").add(newClaim).addOnSuccessListener { ref ->
                                                             ref.update("id", ref.id)
+
+                                                            // --- NEW: TRIGGER ADMIN NOTIFICATION ---
+                                                            com.example.lostandfound.data.EmailService.sendAdminNotification(
+                                                                type = "ITEM CLAIM SUBMISSION",
+                                                                itemName = item!!.name,
+                                                                reporterName = auth.currentUser?.displayName ?: "Citizen",
+                                                                reporterEmail = auth.currentUser?.email ?: "Unknown",
+                                                                details = "A new claim has been submitted for '${item!!.name}'. Proof description: ${newClaim.proofDescription}"
+                                                            )
+                                                            // ----------------------------------------
                                                             
                                                             // ALSO: Update the associated lost item status & link if linked
                                                             if (!lostItemId.isNullOrBlank()) {

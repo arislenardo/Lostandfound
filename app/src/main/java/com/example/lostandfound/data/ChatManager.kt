@@ -8,7 +8,7 @@ import com.google.firebase.firestore.Query
 object ChatManager {
     private val db = FirebaseFirestore.getInstance()
 
-    fun sendMessage(message: Message, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+    fun sendMessage(message: Message, skipEmail: Boolean = false, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
         // Create a unique chat ID based on participants to group messages (optional, or just query by participants)
         // For simplicity in this app, we'll store all messages in a top-level "messages" collection
         // and query them. For scalability, subcollections `users/{uid}/chats` are better, but this is a prototype.
@@ -18,18 +18,20 @@ object ChatManager {
             .addOnSuccessListener { doc ->
                 db.collection("messages").document(doc.id).update("id", doc.id)
                 
-                // --- NEW: TRIGGER EMAIL NOTIFICATION ---
-                db.collection("users").document(message.receiverId).get()
-                    .addOnSuccessListener { userDoc ->
-                        val receiverEmail = userDoc.getString("email") ?: ""
-                        if (receiverEmail.isNotBlank()) {
-                            com.example.lostandfound.data.EmailService.sendNewMessageNotification(
-                                receiverEmail = receiverEmail,
-                                senderName = message.senderName,
-                                messageText = message.text
-                            )
+                // --- TRIGGER EMAIL NOTIFICATION (If not explicitly skipped) ---
+                if (!skipEmail) {
+                    db.collection("users").document(message.receiverId).get()
+                        .addOnSuccessListener { userDoc ->
+                            val receiverEmail = userDoc.getString("email") ?: ""
+                            if (receiverEmail.isNotBlank()) {
+                                com.example.lostandfound.data.EmailService.sendNewMessageNotification(
+                                    receiverEmail = receiverEmail,
+                                    senderName = message.senderName,
+                                    messageText = message.text
+                                )
+                            }
                         }
-                    }
+                }
                 // ----------------------------------------
 
                 onSuccess()

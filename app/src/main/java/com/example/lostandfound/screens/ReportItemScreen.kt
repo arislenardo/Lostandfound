@@ -324,6 +324,17 @@ fun ReportItemScreen(navController: NavController) {
             .add(newItem)
             .addOnSuccessListener { foundItemRef ->
                 foundItemRef.update("id", foundItemRef.id)
+
+                // --- NEW: TRIGGER ADMIN NOTIFICATION ---
+                com.example.lostandfound.data.EmailService.sendAdminNotification(
+                    type = "FOUND ITEM REPORT",
+                    itemName = itemName,
+                    reporterName = currentUser?.displayName ?: "Citizen",
+                    reporterEmail = currentUser?.email ?: "Unknown",
+                    details = "A new found item '$itemName' has been reported at $location. Please check the dashboard to verify."
+                )
+                // ----------------------------------------
+
                 // Check if user is admin, if so, log it
                 if (AuthManager.isCurrentUserAdmin()) {
                     val action = com.example.lostandfound.model.AdminAction(
@@ -356,7 +367,7 @@ fun ReportItemScreen(navController: NavController) {
                         db.collection("match_notifications").add(notification).addOnSuccessListener { ref ->
                             ref.update("id", ref.id)
                             if (lostItem.email.isNotBlank()) {
-                                com.example.lostandfound.data.EmailService.sendMatchNotification(
+                                com.example.lostandfound.data.EmailService.sendSmartMatchNotification(
                                     userEmail = lostItem.email,
                                     itemName = lostItem.name,
                                     matchType = "Found Item"
