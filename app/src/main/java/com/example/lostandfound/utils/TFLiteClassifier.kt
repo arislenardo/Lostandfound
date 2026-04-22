@@ -149,5 +149,9 @@ class TFLiteClassifier(val context: Context) {
      */
     fun classify(bitmap: Bitmap): List<String> = emptyList()
 
+    /**
+     * Legacy: mapping function for labels to broader categories.
+     * Currently returns the original label unchanged.
+     */
     fun mapLabelToCategory(label: String): String = label
 }

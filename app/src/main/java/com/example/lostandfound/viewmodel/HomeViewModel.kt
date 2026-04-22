@@ -8,6 +8,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
 
+/**
+ * UI state representation for the Home Dashboard.
+ * Holds user profile information, admin status, and notification counts.
+ */
 data class HomeUiState(
     val isAdmin: Boolean = false,
     val firstName: String = "User",
@@ -20,6 +24,10 @@ data class HomeUiState(
     val role: String = "Resident"
 )
 
+/**
+ * ViewModel responsible for managing the state of the Home Dashboard.
+ * Listens to real-time updates from Firestore to calculate unread message and notification counts.
+ */
 class HomeViewModel : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()

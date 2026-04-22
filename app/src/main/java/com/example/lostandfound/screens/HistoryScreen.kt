@@ -25,6 +25,10 @@ import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Displays an audit log of administrative actions.
+ * Fetches and displays a paginated list of `AdminAction` records from Firestore.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(navController: NavController) {
@@ -118,6 +122,9 @@ fun HistoryScreen(navController: NavController) {
     }
 }
 
+/**
+ * Renders a single history log entry card displaying the action type, item title, admin name, and timestamp.
+ */
 @Composable
 fun AdminActionCard(action: AdminAction) {
     val sdf = remember { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()) }

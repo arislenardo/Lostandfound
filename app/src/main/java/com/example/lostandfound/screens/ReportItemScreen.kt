@@ -88,7 +88,11 @@ private fun createImageUri(context: Context): Uri {
 }
 
 
-// --- SCREEN 3: REPORT FOUND ITEM FORM (Data Entry) ---
+/**
+ * Screen for reporting a found item.
+ * Allows users to capture/upload an image, provide item details, and pick a location on a map.
+ * Extracts image feature vectors for AI matching and generates potential match notifications.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportItemScreen(navController: NavController) {

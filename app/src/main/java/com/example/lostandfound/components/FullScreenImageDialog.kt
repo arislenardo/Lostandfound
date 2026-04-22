@@ -22,6 +22,10 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 
+/**
+ * A dialog composable that displays an image in full screen with zoom and pan capabilities.
+ * Users can pinch to zoom and drag to pan around the image.
+ */
 @Composable
 fun FullScreenImageDialog(
     imageUrl: String,

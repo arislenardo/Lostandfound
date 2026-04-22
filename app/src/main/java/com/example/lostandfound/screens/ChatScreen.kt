@@ -45,6 +45,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import com.example.lostandfound.components.FullScreenImageDialog
 
+/**
+ * Real-time messaging interface between a citizen and an administrator.
+ * Supports sending text messages, uploading images, and allows admins to conclude (close) a chat session.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(navController: NavController, receiverId: String, receiverName: String) {
@@ -377,6 +381,10 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
     }
 }
 
+/**
+ * Renders an individual message bubble within the chat screen, styling it differently
+ * based on whether it was sent by the current user or the receiver.
+ */
 @Composable
 fun CityMessageBubble(message: Message, isCurrentUser: Boolean, onImageClick: (String) -> Unit = {}) {
     val dateFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -466,5 +474,8 @@ fun CityMessageBubble(message: Message, isCurrentUser: Boolean, onImageClick: (S
 }
 
 // Legacy alias
+/**
+ * Legacy alias for [CityMessageBubble].
+ */
 @Composable
 fun MessageBubble(message: Message, isCurrentUser: Boolean) = CityMessageBubble(message, isCurrentUser)

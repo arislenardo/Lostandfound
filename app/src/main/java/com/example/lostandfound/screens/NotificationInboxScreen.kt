@@ -40,7 +40,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// Unified Notification Data Class
+/**
+ * A unified notification data class used to standardize different types of notifications
+ * (messages, matches, claim updates) for display in the inbox.
+ */
 data class UnifiedNotification(
     val id: String,
     val type: NotificationType,
@@ -52,13 +55,23 @@ data class UnifiedNotification(
     val actionData2: String = "" // E.g., userName for chat
 )
 
+/**
+ * Enum defining the types of notifications handled by the inbox.
+ */
 enum class NotificationType { MESSAGE, MATCH, CLAIM_PENDING, CLAIM_UPDATE }
 
-// Persists across screen navigations for the app session — prevents cleared cards from reappearing
+/**
+ * In-memory cache to persist the read state of messages across navigation events within the same app session.
+ * Prevents cleared cards from reappearing.
+ */
 private object NotificationReadCache {
     val messageIds = mutableSetOf<String>()
 }
 
+/**
+ * A central inbox screen displaying unified notifications for messages, matches, and claim updates.
+ * Supports clearing all notifications and navigating to the relevant detail screens.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationInboxScreen(navController: NavController) {
@@ -409,6 +422,10 @@ fun NotificationInboxScreen(navController: NavController) {
     }
 }
 
+/**
+ * Renders a single notification item in the inbox, styling it based on the notification type
+ * and handling click actions to navigate to the appropriate screen.
+ */
 @Composable
 fun CityNotificationItem(
     notification: UnifiedNotification, 

@@ -92,7 +92,11 @@ private val CityCream      = Color(0xFFFDF8F0)   // Off-white / cream background
 private val CityWhite      = Color(0xFFFFFFFF)
 private val CityError      = Color(0xFFB00020)
 
-// ── Login Screen ─────────────────────────────────────────────────────────────
+/**
+ * The primary authentication and registration screen.
+ * Handles Email/Password sign-in, Google Sign-in, and Phone OTP authentication.
+ * Manages user profile setup including role selection (Resident/Non-resident) and address assignment.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(navController: NavController) {
@@ -1087,6 +1091,9 @@ fun LoginScreen(navController: NavController) {
     }
 }
 
+/**
+ * Reusable card component for selecting user roles during registration.
+ */
 @Composable
 fun RoleSelectionCard(
     modifier: Modifier = Modifier,
@@ -1137,12 +1144,18 @@ fun RoleSelectionCard(
     }
 }
 
+/**
+ * Helper extension to find the enclosing Activity from a Context.
+ */
 fun Context.findActivity(): Activity? = when (this) {
     is Activity      -> this
     is ContextWrapper -> baseContext.findActivity()
     else             -> null
 }
 
+/**
+ * Loads and parses Philippine location data (Provinces and Cities) from raw JSON resources.
+ */
 fun loadPhLocations(context: Context): Map<String, List<String>> {
     val map = mutableMapOf<String, List<String>>()
     try {

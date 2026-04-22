@@ -25,6 +25,10 @@ object TextSimilarity {
         "of", "with", "my", "i", "this", "that", "its", "has", "very"
     )
 
+    /**
+     * Normalizes and tokenizes a given string into a set of unique words.
+     * Removes punctuation, converts to lowercase, and filters out common stop words.
+     */
     private fun tokenize(s: String): Set<String> {
         return s.lowercase()
             .replace(Regex("[^a-z0-9\\s]"), " ")  // strip punctuation
@@ -33,6 +37,11 @@ object TextSimilarity {
             .toSet()
     }
 
+    /**
+     * Calculates the text similarity between two strings using a hybrid approach of 
+     * Jaccard similarity and string containment.
+     * Returns a score between 0.0 and 1.0.
+     */
     fun similarity(s1: String, s2: String): Double {
         if (s1.isBlank() || s2.isBlank()) return 0.0
 

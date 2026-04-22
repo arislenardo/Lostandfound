@@ -34,6 +34,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 
+/**
+ * Displays a list of pending and disputed claims for station administrators to review.
+ * Admins can approve, reject, or message the claimant directly from this screen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminClaimsScreen(navController: NavController) {
@@ -227,6 +231,10 @@ fun AdminClaimsScreen(navController: NavController) {
     }
 }
 
+/**
+ * Renders a card displaying the details of a user's claim, including their proof description,
+ * uploaded proof image, and actionable buttons for the admin (Message, Reject, Approve).
+ */
 @Composable
 fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit, onMessage: () -> Unit) {
     Card(
@@ -332,6 +340,9 @@ fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Uni
 }
 
 // Keep the old composable name as an alias for navigation compatibility
+/**
+ * Legacy alias for [CityClaimReviewCard].
+ */
 @Composable
 fun ClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit, onMessage: () -> Unit) =
     CityClaimReviewCard(claim, onApprove, onReject, onMessage)

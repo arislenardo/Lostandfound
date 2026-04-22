@@ -34,6 +34,10 @@ import com.example.lostandfound.model.MatchNotificationStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.firestore.FirebaseFirestore
 
+/**
+ * Displays a list of potential AI-generated matches for the user's reported lost items.
+ * Users can view details or dismiss the match notifications.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyMatchesScreen(navController: NavController) {
@@ -179,6 +183,10 @@ fun MyMatchesScreen(navController: NavController) {
     }
 }
 
+/**
+ * Renders a card for a match notification, showing the found item's image, match percentage,
+ * and actions to view details or dismiss.
+ */
 @Composable
 fun CityMatchNotificationCard(
     notification: MatchNotification,
@@ -374,6 +382,9 @@ fun CityMatchNotificationCard(
     }
 }
 
+/**
+ * Legacy alias for [CityMatchNotificationCard].
+ */
 @Composable
 fun MatchNotificationCard(notification: MatchNotification, onViewDetails: () -> Unit, onDismiss: () -> Unit) =
     CityMatchNotificationCard(notification, onViewDetails, onDismiss)

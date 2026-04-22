@@ -36,6 +36,10 @@ import com.google.firebase.firestore.Query
 
 private const val FOUND_PAGE_SIZE = 10
 
+/**
+ * Displays a searchable and filterable database of found items.
+ * Admins can see all items, while residents see only "AVAILABLE" items.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LostItemsScreen(navController: NavController) {
@@ -246,6 +250,9 @@ fun LostItemsScreen(navController: NavController) {
     }
 }
 
+/**
+ * A reusable pagination component for navigating through lists of items.
+ */
 @Composable
 fun PaginationBar(currentPage: Int, totalPages: Int, onPageSelected: (Int) -> Unit) {
     if (totalPages <= 1) return
@@ -290,6 +297,9 @@ fun PaginationBar(currentPage: Int, totalPages: Int, onPageSelected: (Int) -> Un
     }
 }
 
+/**
+ * A card representing a single found item in the list, showing its thumbnail, name, location, and status.
+ */
 @Composable
 fun FoundItemCard(item: FoundItem, navController: NavController, isAdmin: Boolean) {
     Card(

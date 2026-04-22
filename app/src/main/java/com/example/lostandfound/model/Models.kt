@@ -3,6 +3,9 @@ package com.example.lostandfound.model
 import java.util.Date
 
 // --- UPDATED DATA MODELS ---
+/**
+ * Data model for an item that has been found by a user or the station.
+ */
 data class FoundItem(
     val id: String = "",
     val userId: String = "",
@@ -22,6 +25,9 @@ data class FoundItem(
     val createdAt: Date? = null
 )
 
+/**
+ * Data model for an item that has been reported as lost by a user.
+ */
 data class LostItem(
     val id: String = "",
     val userId: String = "",
@@ -41,6 +47,9 @@ data class LostItem(
 )
 
 // --- PROFILE MODELS ---
+/**
+ * Data model representing a user's profile and role within the application.
+ */
 data class UserProfile(
     val uid: String = "",
     val name: String = "",
@@ -50,6 +59,9 @@ data class UserProfile(
 )
 
 // --- AUDIT LOGGING ---
+/**
+ * Data model for logging administrative actions (e.g., approvals, deletions) for auditing purposes.
+ */
 data class AdminAction(
     val id: String = "",
     val adminId: String = "",

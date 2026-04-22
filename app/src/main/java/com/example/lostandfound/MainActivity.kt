@@ -29,6 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.*
 import com.example.lostandfound.ui.theme.LostandfoundTheme
 
+/**
+ * The main entry point of the application.
+ * Handles the initialization of Google Places API, checks for push notification permissions,
+ * and sets up the primary Jetpack Compose navigation graph.
+ */
 class MainActivity : ComponentActivity() {
     
     // Permission launcher for Android 13+ Push Notifications
@@ -86,6 +91,10 @@ class MainActivity : ComponentActivity() {
 }
 
 // --- NAVIGATION CONTROLLER ---
+/**
+ * Sets up the NavHost and defines the navigation routes for the entire application.
+ * Also synchronizes the user's FCM token upon successful login.
+ */
 @Composable
 fun LostAndFoundApp() {
     val navController = rememberNavController()

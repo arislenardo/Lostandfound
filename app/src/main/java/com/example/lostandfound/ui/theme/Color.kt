@@ -2,7 +2,10 @@ package com.example.lostandfound.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Police Station Palette
+/**
+ * Original Police Station color palette definition.
+ * Contains legacy color tokens mapped to Material3 standard naming schemes to avoid breakages.
+ */
 val PoliceNavy = Color(0xFF1B263B) // Primary
 val PoliceSteel = Color(0xFF778DA9) // Secondary
 val PoliceGold = Color(0xFFFFD700) // Accent/Tertiary (for dark mode)

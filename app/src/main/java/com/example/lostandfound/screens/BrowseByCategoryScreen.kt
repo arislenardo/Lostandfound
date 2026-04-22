@@ -60,6 +60,10 @@ private val CATEGORIES = listOf(
     CategoryMeta("Others",                Icons.Default.Widgets,             CityTheme.Brown),
 )
 
+/**
+ * Displays a grid of item categories. When a category is selected, it shows a tabbed list
+ * of Found and Lost items within that specific category, allowing users to filter by date.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseByCategoryScreen(navController: NavController) {
@@ -155,6 +159,9 @@ fun BrowseByCategoryScreen(navController: NavController) {
     }
 }
 
+/**
+ * Renders a single category card in the category grid, showing its icon, name, and total item count.
+ */
 @Composable
 private fun CategoryGridCard(meta: CategoryMeta, count: Int, onClick: () -> Unit) {
     Card(
@@ -202,6 +209,10 @@ private fun CategoryGridCard(meta: CategoryMeta, count: Int, onClick: () -> Unit
     }
 }
 
+/**
+ * Displays the tabbed view (Found vs Lost) and the list of items for the selected category.
+ * Includes a date picker filter.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CategoryItemsList(
@@ -375,6 +386,9 @@ private fun CategoryItemsList(
     }
 }
 
+/**
+ * Displays a placeholder graphic and text when a category or tab has no items to show.
+ */
 @Composable
 private fun EmptyCategoryPlaceholder(message: String) {
     Box(Modifier.fillMaxSize(), Alignment.Center) {

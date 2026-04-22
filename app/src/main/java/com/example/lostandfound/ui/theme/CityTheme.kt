@@ -7,6 +7,10 @@ import androidx.compose.ui.graphics.Color
 // ── City Color Palette ──────────────────────────────────────────────────────
 // These are shared across all screens for a consistent city-themed look.
 
+/**
+ * Core color palette and styling definitions for the Balik-Calasiao application.
+ * Defines the central "CityTheme" object holding consistent UI colors used globally.
+ */
 object CityTheme {
     val Green      = Color(0xFF2D6A4F)   // Deep forest green  – primary actions
     val GreenLight = Color(0xFF40916C)   // Lighter green      – gradients
@@ -20,6 +24,10 @@ object CityTheme {
     val Error      = Color(0xFFB00020)   // Error red
 }
 
+/**
+ * Returns a standardized set of colors for OutlinedTextField components
+ * to maintain visual consistency across all forms and text inputs in the application.
+ */
 @Composable
 fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = CityTheme.Green,

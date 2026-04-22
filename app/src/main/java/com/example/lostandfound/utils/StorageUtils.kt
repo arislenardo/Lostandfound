@@ -7,9 +7,17 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 /**
- * Uploads an image to Firebase Storage under images/{userId}/{uuid}.jpg
- * The userId and userEmail are stored as custom metadata on the file,
- * so you can see who uploaded it directly in the Firebase Storage console.
+ * Asynchronously uploads an image file to Firebase Storage.
+ *
+ * The image is stored under the path `images/{itemType}/{userId}/{uuid}.jpg`.
+ * User information (`userId` and `userEmail`) is attached to the file as custom metadata,
+ * allowing administrators to identify the uploader directly from the Firebase Storage console.
+ *
+ * @param imageUri The local URI of the image to be uploaded.
+ * @param userId The ID of the user uploading the image. Defaults to "anonymous".
+ * @param userEmail The email of the user uploading the image.
+ * @param itemType The category/type of item being uploaded (e.g., "lost", "found", "chat").
+ * @return The public download URL of the uploaded image.
  */
 suspend fun uploadImageToStorage(
     imageUri: Uri,

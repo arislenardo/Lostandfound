@@ -2,6 +2,10 @@ package com.example.lostandfound.model
 
 import java.util.Date
 
+/**
+ * Data class representing an automated notification generated when a newly reported found item 
+ * visually or contextually matches a user's reported lost item.
+ */
 data class MatchNotification(
     val id: String = "",
     val lostItemId: String = "",

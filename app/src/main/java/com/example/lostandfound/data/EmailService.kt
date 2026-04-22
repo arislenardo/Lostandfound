@@ -14,6 +14,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Date
 
+/**
+ * Service object responsible for sending email notifications using the Brevo API.
+ * Handles formatting and dispatching emails for messages, matches, and admin alerts.
+ */
 object EmailService {
     private const val BREVO_API_KEY = "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"
     // MUST be a verified sender in your Brevo Dashboard
@@ -23,6 +27,9 @@ object EmailService {
     private val client = OkHttpClient()
     private val JSON = "application/json; charset=utf-8".toMediaType()
 
+    /**
+     * Internal helper function to send an email payload using the Brevo API.
+     */
     private fun sendEmail(toEmail: String, toName: String, subject: String, htmlContent: String) {
         if (BREVO_API_KEY == "YOUR_BREVO_API_KEY_HERE") {
             println("EmailService: Brevo API key not set. Skipping email to $toEmail.")
@@ -78,6 +85,9 @@ object EmailService {
         }
     }
 
+    /**
+     * Generates a standard HTML email template with consistent Balik-Calasiao branding.
+     */
     private fun getBaseHtmlTemplate(
         headerColor: String,
         headerTitle: String,
@@ -119,7 +129,7 @@ object EmailService {
     }
 
     /**
-     * Notify user about a new message.
+     * Notifies a user via email when they receive a new direct message regarding an active report.
      */
     fun sendNewMessageNotification(receiverEmail: String, senderName: String, messageText: String) {
         val timestamp = SimpleDateFormat("MMM dd, yyyy HH:mm a", Locale.getDefault()).format(Date())
@@ -147,7 +157,7 @@ object EmailService {
     }
 
     /**
-     * Notify user about a potential item match.
+     * Notifies a user via email when the system detects a potential match for their reported lost item.
      */
     fun sendSmartMatchNotification(userEmail: String, itemName: String, matchType: String) {
         val content = """
@@ -178,7 +188,7 @@ object EmailService {
     }
 
     /**
-     * Notify user about claim status changes.
+     * Notifies a user via email about a change in the status of their submitted claim (e.g., approved or rejected).
      */
     fun sendClaimStatusNotification(userEmail: String, itemName: String, status: String) {
         val isApproved = status.uppercase() == "APPROVED"
@@ -227,8 +237,8 @@ object EmailService {
     }
 
     /**
-     * Send an alert to a SPECIFIC admin based on their UID.
-     * Fallback to broadcasting if the specific admin email can't be found.
+     * Sends a targeted email alert to a specific administrator based on their UID.
+     * If the specific admin's email cannot be found, it falls back to broadcasting to all admins.
      */
     fun sendTargetedAdminNotification(adminUid: String, type: String, itemName: String, reporterName: String, reporterEmail: String, details: String) {
         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -286,7 +296,7 @@ object EmailService {
     }
 
     /**
-     * Send general system alerts to ALL accounts in the "admins" collection.
+     * Broadcasts a general system alert email to all verified administrator accounts.
      */
     fun sendAdminNotification(type: String, itemName: String, reporterName: String, reporterEmail: String, details: String) {
         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()

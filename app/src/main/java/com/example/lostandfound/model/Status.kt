@@ -5,6 +5,9 @@ package com.example.lostandfound.model
  * These remain string-based to keep compatibility with existing data.
  */
 
+/**
+ * Constants representing the status of an item (Lost, Found, Claimed, Returned).
+ */
 object ItemStatus {
     const val FOUND = "Found"      // found_items initial status
     const val LOST = "Lost"        // lost_items initial status (if used)
@@ -12,6 +15,9 @@ object ItemStatus {
     const val RETURNED = "RETURNED"// found_items archived
 }
 
+/**
+ * Constants representing the status of a claim made by a user.
+ */
 object ClaimStatus {
     const val PENDING = "PENDING"
     const val APPROVED = "APPROVED"
@@ -22,6 +28,9 @@ object ClaimStatus {
     const val RETURNED = "RETURNED"
 }
 
+/**
+ * Constants representing the status of a match notification (e.g., Unread, Read, Dismissed).
+ */
 object MatchNotificationStatus {
     const val UNREAD = "UNREAD"
     const val READ = "READ"

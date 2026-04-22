@@ -29,7 +29,10 @@ import kotlin.math.*
  *  Category: hard pre-filter when selected (eliminates unrelated item types immediately).
  */
 
-// --- Cosine Similarity ---
+/**
+ * Calculates the cosine similarity between two feature vectors.
+ * Returns a value between -1.0 and 1.0, where 1.0 indicates identical vectors.
+ */
 fun cosineSimilarity(a: List<Double>, b: List<Double>): Double {
     if (a.size != b.size || a.isEmpty()) return 0.0
     val dot   = a.zip(b).sumOf { (x, y) -> x * y }
@@ -38,7 +41,11 @@ fun cosineSimilarity(a: List<Double>, b: List<Double>): Double {
     return if (normA == 0.0 || normB == 0.0) 0.0 else dot / (normA * normB)
 }
 
-// --- Enhanced Image Similarity (Semantic + Color) ---
+/**
+ * Calculates an enhanced image similarity score by combining the cosine similarity of the 
+ * primary semantic embedding (MobileNetV3) and a secondary color histogram intersection.
+ * This ensures matches share both semantic meaning and visual color traits.
+ */
 fun calculateImageSimilarity(a: List<Double>, b: List<Double>): Double {
     if (a.isEmpty() || b.isEmpty()) return 0.0
 
@@ -70,7 +77,11 @@ fun calculateImageSimilarity(a: List<Double>, b: List<Double>): Double {
     return simMN
 }
 
-// --- Match found items against a lost item report ---
+/**
+ * Compares a lost item's data against a database of found items to find potential matches.
+ * Uses a combination of image semantic/color similarity and textual similarity.
+ * Returns a list of matches paired with their similarity score (0.0 to 1.0), sorted descending.
+ */
 fun findPotentialMatches(
     targetName: String,
     targetDesc: String,
@@ -114,7 +125,11 @@ fun findPotentialMatches(
         .sortedByDescending { it.second }
 }
 
-// --- Match lost items against a found item report ---
+/**
+ * Compares a found item's data against a database of lost items to find potential matches.
+ * Uses the same additive scoring algorithm (image similarity + text similarity + keyword bonus)
+ * as `findPotentialMatches`. Returns matches scoring above a predefined threshold.
+ */
 fun findLostMatches(
     targetName: String,
     targetDesc: String,

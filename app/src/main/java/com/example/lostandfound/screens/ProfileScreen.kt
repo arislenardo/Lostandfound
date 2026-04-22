@@ -40,6 +40,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Displays the current user's profile information.
+ * Allows users to edit their display name, phone number, and profile image.
+ * Also provides an option to sign out of the application.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavController) {

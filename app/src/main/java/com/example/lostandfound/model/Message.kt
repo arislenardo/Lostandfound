@@ -2,6 +2,9 @@ package com.example.lostandfound.model
 
 import java.util.Date
 
+/**
+ * Data class representing a single direct message within a chat conversation between two users.
+ */
 data class Message(
     val id: String = "",
     val senderId: String = "",

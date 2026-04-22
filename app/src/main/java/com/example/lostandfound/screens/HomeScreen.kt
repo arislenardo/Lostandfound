@@ -40,6 +40,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.lostandfound.viewmodel.HomeViewModel
 
+/**
+ * The primary dashboard screen of the application.
+ * Displays user profile info, notification badges, and quick-action cards tailored
+ * to whether the current user is a resident or an administrator.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
@@ -419,6 +424,10 @@ fun HomeScreen(navController: NavController) {
     }
 }
 
+/**
+ * A reusable card component used on the Home screen to represent quick actions
+ * (e.g., Report Lost Item, View Messages), optionally displaying a notification badge.
+ */
 @Composable
 fun HomeDashboardCard(
     title: String,

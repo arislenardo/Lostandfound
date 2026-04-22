@@ -37,6 +37,10 @@ import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/**
+ * Displays a list of lost items reported by the current user (or all lost items for admins).
+ * Allows users to filter by status and manually mark an item as resolved.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyItemsScreen(navController: NavController) {
@@ -323,6 +327,10 @@ fun MyItemsScreen(navController: NavController) {
     }
 }
 
+/**
+ * A card representing a single reported lost item, displaying its details and current claim status.
+ * Includes a button to mark the item as resolved if it is still searching.
+ */
 @Composable
 fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean, onFound: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }

@@ -29,6 +29,10 @@ import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/**
+ * Displays a list of unique chat conversations for the current user.
+ * It fetches sent and received messages, merges them, and shows the latest message for each conversation thread.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(navController: NavController) {
@@ -147,6 +151,10 @@ fun ConversationListScreen(navController: NavController) {
     }
 }
 
+/**
+ * Renders a single conversation thread item showing the other user's name, avatar, 
+ * latest message snippet, and an unread badge if applicable.
+ */
 @Composable
 fun CityConversationItem(message: Message, currentUserId: String, navController: NavController) {
     val otherUserId = if (message.senderId == currentUserId) message.receiverId else message.senderId
@@ -217,6 +225,9 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
 }
 
 // Legacy alias
+/**
+ * Legacy alias for [CityConversationItem].
+ */
 @Composable
 fun ConversationItem(message: Message, currentUserId: String, navController: NavController) =
     CityConversationItem(message, currentUserId, navController)

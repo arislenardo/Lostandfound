@@ -2,6 +2,10 @@ package com.example.lostandfound.model
 
 import java.util.Date
 
+/**
+ * Represents a claim made by a user on a found item.
+ * Contains the claim details, proof of ownership, and tracking information for admin review.
+ */
 data class Claim(
     val id: String = "",
     val itemId: String = "",

@@ -37,6 +37,11 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.CameraUpdateFactory
 import kotlinx.coroutines.launch
 
+/**
+ * Main composable screen for displaying and editing the details of a reported lost item.
+ * It handles fetching the item from Firestore, displaying its status, map location, 
+ * and providing editing or deletion capabilities for the owner or administrators.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemDetailScreen(navController: NavController, itemId: String) {
@@ -86,6 +91,10 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
             }
     }
 
+    /**
+     * Updates the current lost item's details in Firestore with the newly edited values
+     * (name, description, location, latitude, longitude).
+     */
     fun updateItem() {
         if (item == null) return
         db.collection("lost_items").document(item!!.id)
@@ -104,6 +113,10 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
             .addOnFailureListener { Toast.makeText(context, "Failed to update", Toast.LENGTH_SHORT).show() }
     }
 
+    /**
+     * Deletes the current lost item from Firestore.
+     * If the user is an admin, it also logs this deletion as an AdminAction for auditing purposes.
+     */
     fun deleteItem() {
         if (item == null) return
         db.collection("lost_items").document(item!!.id).delete()
@@ -337,6 +350,10 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
     }
 }
 
+/**
+ * A reusable, styled card component used to group related details together 
+ * under a common title with a colored accent bar.
+ */
 @Composable
 fun CityDetailCard(title: String, tint: androidx.compose.ui.graphics.Color = CityTheme.Green, content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -357,6 +374,9 @@ fun CityDetailCard(title: String, tint: androidx.compose.ui.graphics.Color = Cit
     }
 }
 
+/**
+ * A reusable component to display a key-value pair (label and value) in a standardized format.
+ */
 @Composable
 fun DetailRow(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {

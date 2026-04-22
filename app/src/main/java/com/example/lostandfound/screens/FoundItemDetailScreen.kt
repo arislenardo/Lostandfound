@@ -52,6 +52,10 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.CameraUpdateFactory
 
+/**
+ * Displays the detailed view of a reported found item.
+ * Allows residents to submit a claim for the item and allows administrators to review, edit, delete, or mark the item as returned.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItemId: String? = null) {
@@ -665,6 +669,9 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
     }
 }
 
+/**
+ * Reusable component to display a label and value in a standardized row format.
+ */
 @Composable
 fun DetailRowLabel(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {

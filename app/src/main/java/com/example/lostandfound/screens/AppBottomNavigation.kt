@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.lostandfound.ui.theme.CityTheme
 
+/**
+ * Renders the bottom navigation bar for the application.
+ * Handles calculating unread notification counts (messages, matches, claims)
+ * and displays badges on the corresponding navigation icons.
+ */
 @Composable
 fun AppBottomNavigation(
     navController: NavController,

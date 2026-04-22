@@ -2,6 +2,9 @@ package com.example.lostandfound.model
 
 import java.util.Date
 
+/**
+ * Data class representing a notification sent to a user when the status of their claim changes (e.g., APPROVED or REJECTED).
+ */
 data class ClaimNotification(
     val id: String = "",
     val claimId: String = "",

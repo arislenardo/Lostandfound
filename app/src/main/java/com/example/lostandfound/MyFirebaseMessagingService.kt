@@ -14,6 +14,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.auth.FirebaseAuth
 import android.util.Log
 
+/**
+ * Service to handle incoming Firebase Cloud Messaging (FCM) push notifications.
+ * Responsible for displaying system notifications when the app is in the background
+ * and updating the user's FCM token in Firestore when it changes.
+ */
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

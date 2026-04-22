@@ -94,6 +94,11 @@ private fun createImageUri(context: Context): Uri {
         imageFile
     )
 }
+/**
+ * Screen for reporting a lost item.
+ * Allows users to capture/upload an image, provide item details, and pick a location on a map.
+ * Extracts image feature vectors for AI matching and compares them against existing found items.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportLostItemScreen(navController: NavController) {

@@ -16,6 +16,11 @@ private val LightColorScheme = lightColorScheme(
     onSurface = PoliceBlack
 )
 
+/**
+ * Main application theme wrapper.
+ * Applies the customized Material3 LightColorScheme and Typography definitions
+ * to the root of the composable hierarchy.
+ */
 @Composable
 fun LostandfoundTheme(
     content: @Composable () -> Unit

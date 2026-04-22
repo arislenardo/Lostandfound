@@ -6,6 +6,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
+/**
+ * Defines custom SVG vector graphics mapped to Compose ImageVectors.
+ * Provides unique icons (like Glasses and Hat) that are not available in the default Material Icons set.
+ */
 object CustomIcons {
     val Glasses: ImageVector
         get() = ImageVector.Builder(

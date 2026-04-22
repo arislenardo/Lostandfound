@@ -6,6 +6,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+/**
+ * Utility function to perform reverse geocoding.
+ * Converts latitude and longitude coordinates into a human-readable address string
+ * (e.g., "Street Name, District, City").
+ */
 suspend fun getReadableAddress(context: Context, latitude: Double, longitude: Double): String {
     return withContext(Dispatchers.IO) {
         try {
