@@ -28,7 +28,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.Image
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -222,22 +224,14 @@ fun LoginScreen(navController: NavController) {
         ) {
             Spacer(Modifier.height(48.dp))
 
-            // ── Emblem / Icon ──────────────────────────────────────────────
-            Box(
+            // ── App Logo ──────────────────────────────────────────────────
+            Image(
+                painter = painterResource(id = R.drawable.app_logo),
+                contentDescription = "App Logo",
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(90.dp)
                     .clip(CircleShape)
-                    .background(CityGold)
-                    .border(3.dp, CityWhite, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.LocationOn,
-                    contentDescription = null,
-                    tint = CityWhite,
-                    modifier = Modifier.size(44.dp)
-                )
-            }
+            )
 
             Spacer(Modifier.height(12.dp))
 

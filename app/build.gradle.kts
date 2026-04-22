@@ -44,6 +44,13 @@ android {
     }
 }
 
+val sourceLogo = file("../../lostandfound-admin/public/app-logo.webp")
+val destLogo = file("src/main/res/drawable/app_logo.webp")
+if (sourceLogo.exists() && !destLogo.exists()) {
+    sourceLogo.copyTo(destLogo, overwrite = true)
+}
+
+
 dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.10.0"))
     implementation("com.google.firebase:firebase-auth")
