@@ -13,13 +13,14 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Date
+import com.example.lostandfound.BuildConfig
 
 /**
  * Service object responsible for sending email notifications using the Brevo API.
  * Handles formatting and dispatching emails for messages, matches, and admin alerts.
  */
 object EmailService {
-    private const val BREVO_API_KEY = "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"
+    private val BREVO_API_KEY = BuildConfig.BREVO_API_KEY
     // MUST be a verified sender in your Brevo Dashboard
     private const val VERIFIED_SENDER_EMAIL = "ladagaas.820.stud@cdd.edu.ph"
     private const val SENDER_NAME = "Balik-Calasiao"
@@ -31,7 +32,7 @@ object EmailService {
      * Internal helper function to send an email payload using the Brevo API.
      */
     private fun sendEmail(toEmail: String, toName: String, subject: String, htmlContent: String) {
-        if (BREVO_API_KEY == "YOUR_BREVO_API_KEY_HERE") {
+        if (BREVO_API_KEY.isBlank() || BREVO_API_KEY == "YOUR_NEW_API_KEY_HERE") {
             println("EmailService: Brevo API key not set. Skipping email to $toEmail.")
             return
         }

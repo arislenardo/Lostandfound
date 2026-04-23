@@ -30,7 +30,7 @@ object AuthManager {
     // Keep for backward compatibility or simple synchronous checks after data is loaded
     /**
      * Asynchronously fetches the list of admin UIDs from Firestore and updates the local cache.
-  
+     */
     fun fetchAdminUids() {
         val db = FirebaseFirestore.getInstance()
         db.collection("admins").get().addOnSuccessListener { result ->
