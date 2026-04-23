@@ -140,6 +140,9 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
         }
     }
 
+    /**
+     * Updates the found item details in the Firestore database.
+     */
     fun updateItem() {
         if (item == null) return
         db.collection("found_items").document(item!!.id)
@@ -158,6 +161,9 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
             .addOnFailureListener { Toast.makeText(context, "Failed to update", Toast.LENGTH_SHORT).show() }
     }
 
+    /**
+     * Deletes the found item from the Firestore database and logs the action if the user is an admin.
+     */
     fun deleteItem() {
         if (item == null) return
         db.collection("found_items").document(item!!.id).delete()
