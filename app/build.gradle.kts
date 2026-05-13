@@ -53,6 +53,13 @@ android {
     androidResources {
         noCompress += "tflite"
     }
+
+    applicationVariants.all {
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+            output.outputFileName = "Balik-Calasiao.apk"
+        }
+    }
 }
 
 val sourceLogo = file("../../lostandfound-admin/public/app-logo.webp")
