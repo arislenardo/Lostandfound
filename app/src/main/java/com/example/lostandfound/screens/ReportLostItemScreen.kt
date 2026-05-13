@@ -578,8 +578,12 @@ fun ReportLostItemScreen(navController: NavController) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(140.dp)
+                                            .height(200.dp)
                                             .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                                            .clickable {
+                                                showMatchesDialog = false
+                                                navController.navigate("found_item_detail/${item.id}?lostItemId=$savedLostItemId")
+                                            }
                                     ) {
                                         if (item.imageUrl.isNotBlank()) {
                                             AsyncImage(
@@ -588,8 +592,8 @@ fun ReportLostItemScreen(navController: NavController) {
                                                     .crossfade(true)
                                                     .build(),
                                                 contentDescription = item.name,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
+                                                contentScale = ContentScale.Fit,
+                                                modifier = Modifier.fillMaxSize().background(CityTheme.Cream.copy(alpha = 0.4f))
                                             )
                                         } else {
                                             Box(
@@ -598,7 +602,7 @@ fun ReportLostItemScreen(navController: NavController) {
                                                     .background(CityTheme.Cream),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text("📦", fontSize = 40.sp)
+                                                Text("📦", fontSize = 48.sp)
                                             }
                                         }
                                         // Match badge overlay
@@ -654,16 +658,7 @@ fun ReportLostItemScreen(navController: NavController) {
                                                 )
                                             }
                                         }
-                                        if (item.description.isNotBlank()) {
-                                            Spacer(Modifier.height(4.dp))
-                                            Text(
-                                                item.description,
-                                                fontSize = 12.sp,
-                                                color = CityTheme.Brown.copy(0.6f),
-                                                maxLines = 2,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                            )
-                                        }
+
                                         Spacer(Modifier.height(12.dp))
                                         Button(
                                             onClick = {

@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -192,6 +194,8 @@ fun AdminClaimsScreen(navController: NavController) {
                                     pendingStatus = ClaimStatus.REJECTED
                                     showConfirmDialog = true
                                 },
+                                onViewItem = { navController.navigate("found_item_detail/${claim.itemId}") },
+                                onViewLostReport = { navController.navigate("item_detail/${claim.lostItemId}") },
                                 onMessage = {
                                     val currentUser = FirebaseAuth.getInstance().currentUser
                                     val adminId = currentUser?.uid ?: ""
@@ -260,7 +264,7 @@ fun AdminClaimsScreen(navController: NavController) {
  * uploaded proof image, and actionable buttons for the admin (Message, Reject, Approve).
  */
 @Composable
-fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit, onMessage: () -> Unit) {
+fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Unit, onMessage: () -> Unit, onViewItem: () -> Unit = {}, onViewLostReport: () -> Unit = {}) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -288,6 +292,42 @@ fun CityClaimReviewCard(claim: Claim, onApprove: () -> Unit, onReject: () -> Uni
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text("DISPUTED", color = CityTheme.Error, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = CityTheme.Brown.copy(alpha = 0.08f))
+            Spacer(Modifier.height(12.dp))
+
+            Text("Cross-Reference Records", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CityTheme.Brown.copy(alpha = 0.5f))
+            Spacer(Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Link to Found Item
+                TextButton(
+                    onClick = onViewItem,
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    colors = ButtonDefaults.textButtonColors(containerColor = CityTheme.Green.copy(0.08f), contentColor = CityTheme.Green),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Icon(Icons.Default.Search, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Original Found Item", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Link to Lost Report (if exists)
+                if (claim.lostItemId.isNotBlank()) {
+                    TextButton(
+                        onClick = onViewLostReport,
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        colors = ButtonDefaults.textButtonColors(containerColor = CityTheme.Gold.copy(0.12f), contentColor = CityTheme.Gold),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Info, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Claimant's Lost Report", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
