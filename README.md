@@ -57,6 +57,3 @@ If you're a developer and want to build the project from scratch, follow these s
 
 ## 👥 Contributors
 - DAYOnamics
-
-## 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
