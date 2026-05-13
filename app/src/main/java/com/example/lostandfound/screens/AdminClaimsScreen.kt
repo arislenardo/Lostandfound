@@ -193,8 +193,32 @@ fun AdminClaimsScreen(navController: NavController) {
                                     showConfirmDialog = true
                                 },
                                 onMessage = {
-                                    val userName = claim.userEmail.substringBefore("@")
-                                    navController.navigate("chat/${claim.userId}/${userName}")
+                                    val currentUser = FirebaseAuth.getInstance().currentUser
+                                    val adminId = currentUser?.uid ?: ""
+                                    
+                                    // Inject the claim proof message into the chat history between claimant and this admin
+                                    db.collection("messages")
+                                        .whereEqualTo("itemId", claim.itemId)
+                                        .whereEqualTo("senderId", claim.userId)
+                                        .whereEqualTo("receiverId", adminId)
+                                        .get()
+                                        .addOnSuccessListener { snap ->
+                                            if (snap.isEmpty) {
+                                                val msg = com.example.lostandfound.model.Message(
+                                                    senderId = claim.userId,
+                                                    senderName = claim.userName,
+                                                    receiverId = adminId,
+                                                    receiverName = currentUser?.email?.substringBefore("@") ?: "Admin",
+                                                    text = "Claim proof submitted for '${claim.itemName}': ${claim.proofDescription}",
+                                                    timestamp = claim.timestamp,
+                                                    itemId = claim.itemId,
+                                                    imageUrl = claim.imageUrl
+                                                )
+                                                db.collection("messages").add(msg)
+                                            }
+                                            val userName = claim.userEmail.substringBefore("@")
+                                            navController.navigate("chat/${claim.userId}/${userName}")
+                                        }
                                 }
                             )
                         }
