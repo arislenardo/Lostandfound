@@ -252,11 +252,13 @@ private fun CategoryItemsList(
         db.collection("lost_items").whereEqualTo("category", category).get()
             .addOnSuccessListener { snap ->
                 lostItems = snap.documents.mapNotNull { it.toObject(LostItem::class.java)?.copy(id = it.id) }
+                    .sortedWith(compareByDescending<LostItem> { it.createdAt?.time ?: 0L }.thenByDescending { it.dateLost.time })
                 isLoading = false
             }
         db.collection("found_items").whereEqualTo("category", category).get()
             .addOnSuccessListener { snap ->
                 foundItems = snap.documents.mapNotNull { it.toObject(FoundItem::class.java)?.copy(id = it.id) }
+                    .sortedWith(compareByDescending<FoundItem> { it.createdAt?.time ?: 0L }.thenByDescending { it.dateFound.time })
                 isLoading = false
             }
     }
