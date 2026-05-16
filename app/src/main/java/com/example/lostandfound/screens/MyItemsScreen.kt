@@ -99,6 +99,7 @@ fun MyItemsScreen(navController: NavController) {
                 when(selectedStatus) {
                     "SEARCHING" -> it.status != ClaimStatus.FOUND && 
                                   it.status != ClaimStatus.RETURNED &&
+                                  it.status != ClaimStatus.RESOLVED &&
                                   it.status != ClaimStatus.CLAIM_PENDING && 
                                   it.status != ClaimStatus.DISPUTED && 
                                   it.status != ClaimStatus.APPROVED && 
@@ -107,7 +108,7 @@ fun MyItemsScreen(navController: NavController) {
                                      it.status == ClaimStatus.DISPUTED || 
                                      it.status == ClaimStatus.APPROVED || 
                                      it.status == ClaimStatus.REJECTED
-                    "RESOLVED" -> it.status == ClaimStatus.FOUND || it.status == ClaimStatus.RETURNED
+                    "RESOLVED" -> it.status == ClaimStatus.FOUND || it.status == ClaimStatus.RETURNED || it.status == ClaimStatus.RESOLVED
                     else -> true
                 }
             }
@@ -284,17 +285,13 @@ fun MyItemsScreen(navController: NavController) {
             AlertDialog(
                 onDismissRequest = { showFoundConfirm = false },
                 shape = RoundedCornerShape(16.dp),
-                title = { Text("Mark as Resolved?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
-                text = { Text("Are you sure? This will mark the '${itemToMarkFound!!.name}' report as RESOLVED. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
+                title = { Text("Delete Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+                text = { Text("Are you sure? This will delete the '${itemToMarkFound!!.name}' report. If you found your item, this is the correct action to take. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
                 confirmButton = {
                     Button(
                         onClick = {
-                            db.collection("lost_items").document(itemToMarkFound!!.id).update(
-                                mapOf(
-                                    "status" to ClaimStatus.FOUND,
-                                    "claimedFoundItemId" to "" // Clear link if manually resolved
-                                )
-                            ).addOnSuccessListener {
+                            db.collection("lost_items").document(itemToMarkFound!!.id).delete()
+                                .addOnSuccessListener {
                                 // Archive any active claims related to this manually resolved item
                                 db.collection("claims")
                                     .whereEqualTo("lostItemId", itemToMarkFound!!.id)
@@ -308,14 +305,14 @@ fun MyItemsScreen(navController: NavController) {
                                         if (!snap.isEmpty) batch.commit()
                                     }
 
-                                Toast.makeText(context, "Marked as Resolved! Active claims archived.", Toast.LENGTH_SHORT).show()
-                                // Update local state to reflect change without removing from list
-                                allItems = allItems.map { if (it.id == itemToMarkFound!!.id) it.copy(status = ClaimStatus.FOUND, claimedFoundItemId = "") else it }
+                                Toast.makeText(context, "Report Deleted! Active claims archived.", Toast.LENGTH_SHORT).show()
+                                // Update local state by removing from list
+                                allItems = allItems.filter { it.id != itemToMarkFound!!.id }
                             }
                             showFoundConfirm = false
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                    ) { Text("Yes, Mark Resolved") }
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
+                    ) { Text("Yes, Delete Report") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showFoundConfirm = false }) {
@@ -381,31 +378,24 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                     Text("By: ${item.email}", fontSize = 10.sp, color = CityTheme.Brown.copy(0.4f))
                 }
 
-                if (item.status != ClaimStatus.APPROVED &&
-                    item.status != ClaimStatus.REJECTED &&
-                    item.status != ClaimStatus.FOUND &&
-                    item.status != ClaimStatus.RETURNED &&
-                    item.status != ClaimStatus.CLAIM_PENDING &&
-                    item.status != ClaimStatus.DISPUTED
-                ) {
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = onFound,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
-                    ) { Text("Mark as Resolved", fontSize = 13.sp) }
-                } else {
-                    Spacer(Modifier.height(8.dp))
-                    val (statusLabel, statusColor) = when (item.status) {
-                        ClaimStatus.APPROVED      -> "APPROVED (Pick up at Station)" to CityTheme.Green
-                        ClaimStatus.REJECTED      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
-                        ClaimStatus.DISPUTED      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
-                        ClaimStatus.FOUND         -> "RESOLVED (FOUND PERSONALLY)" to CityTheme.Green
-                        ClaimStatus.RETURNED      -> "RESOLVED (RETURNED BY STATION)" to CityTheme.Green
-                        ClaimStatus.CLAIM_PENDING -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
-                        else                      -> "STATUS: ${item.status}" to CityTheme.Gold
+                Spacer(Modifier.height(8.dp))
+                val (statusLabel, statusColor) = when (item.status) {
+                    ClaimStatus.APPROVED      -> "APPROVED (Pick up at Station)" to CityTheme.Green
+                    ClaimStatus.REJECTED      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
+                    ClaimStatus.DISPUTED      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
+                    ClaimStatus.FOUND         -> "RESOLVED" to CityTheme.Green
+                    ClaimStatus.RETURNED      -> "RESOLVED" to CityTheme.Green
+                    ClaimStatus.RESOLVED      -> "RESOLVED" to CityTheme.Green
+                    ClaimStatus.CLAIM_PENDING -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
+                    else                      -> {
+                        val s = (item.status ?: "").uppercase()
+                        if (s.isBlank() || s == "PENDING" || s == "SEARCHING") {
+                            "SEARCHING" to CityTheme.Blue
+                        } else {
+                            "STATUS: $s" to CityTheme.Gold
+                        }
                     }
+                }
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -422,11 +412,10 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                         }
                     }
                 }
-            }
-            if (isAdmin) {
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = CityTheme.Gold)
-            }
+                if (isAdmin) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = CityTheme.Gold)
+                }
         }
     }
 }

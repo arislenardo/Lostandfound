@@ -27,6 +27,19 @@ import androidx.core.content.ContextCompat
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import com.example.lostandfound.ui.theme.LostandfoundTheme
 
 /**
@@ -121,20 +134,27 @@ fun LostAndFoundApp() {
     }
 
 
-    NavHost(navController = navController, startDestination = startDestination) {
-        composable("login") { LoginScreen(navController) }
-        composable("home") { HomeScreen(navController) }
-        composable("report") { ReportItemScreen(navController) }
-        composable("lost") { LostItemsScreen(navController) }
-        composable("report_lost") { ReportLostItemScreen(navController) }
-        composable("my_items") { MyItemsScreen(navController) }
+    NavHost(
+        navController = navController, 
+        startDestination = startDestination,
+        enterTransition = { slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)) },
+        exitTransition = { slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(250)) + fadeOut(animationSpec = tween(250)) },
+        popEnterTransition = { slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)) },
+        popExitTransition = { slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(250)) + fadeOut(animationSpec = tween(250)) }
+    ) {
+        composable("login") { PreventClickThrough { LoginScreen(navController) } }
+        composable("home") { PreventClickThrough { HomeScreen(navController) } }
+        composable("report") { PreventClickThrough { ReportItemScreen(navController) } }
+        composable("lost") { PreventClickThrough { LostItemsScreen(navController) } }
+        composable("report_lost") { PreventClickThrough { ReportLostItemScreen(navController) } }
+        composable("my_items") { PreventClickThrough { MyItemsScreen(navController) } }
         composable(
             route = "item_detail/{itemId}",
             arguments = listOf(navArgument("itemId") { type = NavType.StringType })
         ) { backStackEntry ->
             val itemId = backStackEntry.arguments?.getString("itemId")
             if (itemId != null) {
-                ItemDetailScreen(navController = navController, itemId = itemId)
+                PreventClickThrough { ItemDetailScreen(navController = navController, itemId = itemId) }
             }
         }
         composable(
@@ -147,11 +167,11 @@ fun LostAndFoundApp() {
             val itemId = backStackEntry.arguments?.getString("itemId")
             val lostItemId = backStackEntry.arguments?.getString("lostItemId")
             if (itemId != null) {
-                FoundItemDetailScreen(navController = navController, itemId = itemId, lostItemId = lostItemId)
+                PreventClickThrough { FoundItemDetailScreen(navController = navController, itemId = itemId, lostItemId = lostItemId) }
             }
         }
         composable("conversations") {
-            ConversationListScreen(navController = navController)
+            PreventClickThrough { ConversationListScreen(navController = navController) }
         }
         composable(
             route = "chat/{userId}/{userName}",
@@ -162,25 +182,67 @@ fun LostAndFoundApp() {
         ) { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId") ?: ""
             val userName = backStackEntry.arguments?.getString("userName") ?: "User"
-            ChatScreen(navController = navController, receiverId = userId, receiverName = userName)
+            PreventClickThrough { ChatScreen(navController = navController, receiverId = userId, receiverName = userName) }
         }
         composable("admin_claims") {
-            AdminClaimsScreen(navController = navController)
+            PreventClickThrough { AdminClaimsScreen(navController = navController) }
         }
         composable("notification_inbox") {
-            NotificationInboxScreen(navController = navController)
+            PreventClickThrough { NotificationInboxScreen(navController = navController) }
         }
         composable("my_matches") {
-            MyMatchesScreen(navController = navController)
+            PreventClickThrough { MyMatchesScreen(navController = navController) }
         }
         composable("browse_by_category") {
-            BrowseByCategoryScreen(navController = navController)
+            PreventClickThrough { BrowseByCategoryScreen(navController = navController) }
         }
         composable("profile") {
-            ProfileScreen(navController = navController)
+            PreventClickThrough { ProfileScreen(navController = navController) }
         }
         composable("history") {
-            HistoryScreen(navController = navController)
+            PreventClickThrough { HistoryScreen(navController = navController) }
         }
+    }
+}
+
+/**
+ * Wraps a screen to prevent click-through issues during Compose navigation transitions.
+ * By tracking the Lifecycle state, we disable interactions on screens that are animating out
+ * or animating in (not RESUMED), completely preventing accidental taps on background screens.
+ */
+@Composable
+fun PreventClickThrough(content: @Composable () -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isResumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, _ ->
+            isResumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(isResumed) {
+                if (!isResumed) {
+                    // When animating out or not fully focused, consume ALL touch events immediately
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                } else {
+                    // When fully resumed, just consume empty taps to prevent them falling through
+                    detectTapGestures {}
+                }
+            }
+    ) {
+        content()
     }
 }

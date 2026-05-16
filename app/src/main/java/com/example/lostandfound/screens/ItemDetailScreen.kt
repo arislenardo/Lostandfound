@@ -212,8 +212,9 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                         "APPROVED"      -> "APPROVED (Pick up at Station)" to CityTheme.Green
                         "REJECTED"      -> "REJECTED" to CityTheme.Error
                         "DISPUTED"      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
-                        "FOUND"         -> "RESOLVED (FOUND PERSONALLY)" to CityTheme.Green
-                        "RETURNED"      -> "RESOLVED (RETURNED BY STATION)" to CityTheme.Green
+                        "RESOLVED"      -> "RESOLVED" to CityTheme.Green
+                        "FOUND"         -> "RESOLVED" to CityTheme.Green
+                        "RETURNED"      -> "RESOLVED" to CityTheme.Green
                         "CLAIM_PENDING" -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
                         else            -> "SEARCHING" to CityTheme.Gold
                     }
@@ -330,10 +331,10 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                         ) {
                             Text("View Linked Found Item", color = CityTheme.White, fontWeight = FontWeight.Bold)
                         }
-                    } else if (item!!.status == "FOUND") {
+                    } else if (item!!.status == "FOUND" || item!!.status == "RETURNED" || item!!.status == "RESOLVED") {
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "This report was marked as resolved personally. No official station record is linked to this manual resolution.",
+                            "This report has been resolved.",
                             fontSize = 12.sp,
                             color = CityTheme.Brown.copy(alpha = 0.5f),
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,

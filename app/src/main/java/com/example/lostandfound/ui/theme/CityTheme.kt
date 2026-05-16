@@ -22,6 +22,7 @@ object CityTheme {
     val Cream      = Color(0xFFFDF8F0)   // Off-white cream    – backgrounds
     val White      = Color(0xFFFFFFFF)   // Pure white         – card surfaces
     val Error      = Color(0xFFB00020)   // Error red
+    val Blue       = Color(0xFF2196F3)   // Material Blue      – searching/info
 }
 
 /**

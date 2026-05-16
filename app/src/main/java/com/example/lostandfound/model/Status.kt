@@ -28,6 +28,7 @@ object ClaimStatus {
     const val CLAIM_PENDING = "CLAIM_PENDING"
     const val FOUND = "FOUND"
     const val RETURNED = "RETURNED"
+    const val RESOLVED = "RESOLVED"
 }
 
 /**

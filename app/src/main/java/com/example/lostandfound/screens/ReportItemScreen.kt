@@ -424,7 +424,7 @@ fun ReportItemScreen(navController: NavController) {
                             db.collection("lost_items").get().addOnSuccessListener { result ->
                                 val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
                                     val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
-                                    if (obj != null && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED) obj else null
+                                    if (obj != null && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED && obj.status != ClaimStatus.RETURNED && obj.status != ClaimStatus.RESOLVED) obj else null
                                 }
                                 coroutineScope.launch {
                                     val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
