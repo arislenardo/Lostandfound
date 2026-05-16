@@ -6,13 +6,15 @@ package com.example.lostandfound.model
  */
 
 /**
- * Constants representing the status of an item (Lost, Found, Claimed, Returned).
+ * Constants representing the status of a found_items document.
+ * All values are ALL_CAPS to match the ClaimStatus convention.
  */
 object ItemStatus {
-    const val FOUND = "Found"      // found_items initial status
-    const val LOST = "Lost"        // lost_items initial status (if used)
-    const val CLAIMED = "CLAIMED"  // found_items when claimed
-    const val RETURNED = "RETURNED"// found_items archived
+    const val FOUND = "FOUND"              // found_items initial status (available to claim)
+    const val LOST = "LOST"                // lost_items initial status
+    const val CLAIMED = "CLAIMED"          // found_items when a claim is approved
+    const val CLAIM_PENDING = "CLAIM_PENDING" // found_items when a claim is pending review
+    const val RETURNED = "RETURNED"        // found_items when physically returned to owner
 }
 
 /**

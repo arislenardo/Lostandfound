@@ -30,6 +30,7 @@ import androidx.navigation.NavController
 import com.example.lostandfound.model.AdminAction
 import com.example.lostandfound.model.Claim
 import com.example.lostandfound.model.ClaimStatus
+import com.example.lostandfound.model.ItemStatus
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -82,7 +83,7 @@ fun AdminClaimsScreen(navController: NavController) {
                 }
                 // ALSO: If approved, mark the found item as CLAIMED so it disappears from public search
                 if (newStatus == ClaimStatus.APPROVED) {
-                    val map = mutableMapOf<String, Any>("status" to "CLAIMED")
+                    val map = mutableMapOf<String, Any>("status" to ItemStatus.CLAIMED)
                     if (claim.lostItemId.isNotBlank()) {
                         map["claimedLostItemId"] = claim.lostItemId
                     }

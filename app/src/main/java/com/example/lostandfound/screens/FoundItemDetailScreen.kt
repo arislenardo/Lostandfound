@@ -383,8 +383,8 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                                                 db.collection("claims").document(claimDoc.id).update("status", "ARCHIVED_SYSTEM")
                                                                 val lostItemId = claimDoc.getString("lostItemId")
                                                                 if (!lostItemId.isNullOrBlank()) {
-                                                                    // Reset other lost items that didn't get this physical item
-                                                                    db.collection("lost_items").document(lostItemId).update("status", "")
+                                                                    // Reset other lost items that didn't get this item back to PENDING (still searching)
+                                                                    db.collection("lost_items").document(lostItemId).update("status", ClaimStatus.PENDING)
                                                                 }
                                                             }
                                                         }

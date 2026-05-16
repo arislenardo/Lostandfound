@@ -58,7 +58,7 @@ fun LostItemsScreen(navController: NavController) {
         
         // Only filter for "FOUND" if user is NOT admin. Admins see everything.
         if (!isAdmin) {
-            query = query.whereEqualTo("status", ItemStatus.FOUND)
+            query = query.whereIn("status", listOf(ItemStatus.FOUND, "Found", "found", "active"))
         }
     
         query.limit(500).get()
@@ -94,10 +94,11 @@ fun LostItemsScreen(navController: NavController) {
         val selectedStatus = statuses[selectedTabIndex]
         if (selectedStatus != "ALL") {
             list = list.filter { 
+                val statusUp = it.status.uppercase()
                 when(selectedStatus) {
-                    "AVAILABLE" -> it.status == ItemStatus.FOUND
-                    "PENDING"   -> it.status == ItemStatus.CLAIMED
-                    "RETURNED"  -> it.status == ItemStatus.RETURNED
+                    "AVAILABLE" -> statusUp == "FOUND" || statusUp == "ACTIVE"
+                    "PENDING"   -> statusUp == "CLAIMED"
+                    "RETURNED"  -> statusUp == "RETURNED"
                     else -> true
                 }
             }
