@@ -17,6 +17,8 @@ import com.example.lostandfound.data.AuthManager
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.firestore.FirebaseFirestore
 import android.util.Log
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.android.gms.tasks.Task
 import android.Manifest
 import android.os.Build
@@ -62,6 +64,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Install App Check debug provider for local debug builds to bypass Play Integrity.
+        // This is automatically excluded from release builds by debugImplementation in build.gradle.kts.
+        if (BuildConfig.DEBUG) {
+            val firebaseAppCheck = FirebaseAppCheck.getInstance()
+            firebaseAppCheck.installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+        }
         
         try {
             val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
