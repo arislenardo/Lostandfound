@@ -38,6 +38,8 @@ import com.example.lostandfound.data.AuthManager
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.example.lostandfound.viewmodel.HomeViewModel
 
 /**
@@ -52,6 +54,8 @@ fun HomeScreen(navController: NavController) {
     val currentUser = auth.currentUser
     val viewModel: HomeViewModel = viewModel()
     val state by viewModel.uiState
+
+    val context = LocalContext.current
 
     val firstName = state.firstName
     val isAdmin = state.isAdmin
@@ -74,22 +78,26 @@ fun HomeScreen(navController: NavController) {
                 TextButton(onClick = {
                     showLogoutDialog = false
                     val user = auth.currentUser
+                    val googleSignInClient = GoogleSignIn.getClient(context, GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    
+                    val performSignOut = {
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            auth.signOut()
+                            navController.navigate("login") { 
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+
                     if (user != null) {
                         FirebaseFirestore.getInstance().collection("users").document(user.uid)
                             .update("fcmToken", "")
                             .addOnCompleteListener {
-                                auth.signOut()
-                                navController.navigate("login") { 
-                                    popUpTo(0) { inclusive = true }
-                                    launchSingleTop = true
-                                }
+                                performSignOut()
                             }
                     } else {
-                        auth.signOut()
-                        navController.navigate("login") { 
-                            popUpTo(0) { inclusive = true }
-                            launchSingleTop = true
-                        }
+                        performSignOut()
                     }
                 }) { Text("Log Out", color = CityTheme.Error, fontWeight = FontWeight.SemiBold) }
             },

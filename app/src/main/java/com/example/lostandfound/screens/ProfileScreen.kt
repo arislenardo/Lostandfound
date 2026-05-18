@@ -39,6 +39,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 
 /**
  * Displays the current user's profile information.
@@ -369,24 +371,27 @@ fun ProfileScreen(navController: NavController) {
                             Button(
                                 onClick = {
                                     val user = auth.currentUser
+                                    val googleSignInClient = GoogleSignIn.getClient(context, GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                    
+                                    val performSignOut = {
+                                        googleSignInClient.signOut().addOnCompleteListener {
+                                            auth.signOut()
+                                            navController.navigate("login") {
+                                                popUpTo(0) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
+                                            showSignOutConfirm = false
+                                        }
+                                    }
+
                                     if (user != null) {
                                         db.collection("users").document(user.uid)
                                             .update("fcmToken", "")
                                             .addOnCompleteListener {
-                                                auth.signOut()
-                                                navController.navigate("login") {
-                                                    popUpTo(0) { inclusive = true }
-                                                    launchSingleTop = true
-                                                }
-                                                showSignOutConfirm = false
+                                                performSignOut()
                                             }
                                     } else {
-                                        auth.signOut()
-                                        navController.navigate("login") {
-                                            popUpTo(0) { inclusive = true }
-                                            launchSingleTop = true
-                                        }
-                                        showSignOutConfirm = false
+                                        performSignOut()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)

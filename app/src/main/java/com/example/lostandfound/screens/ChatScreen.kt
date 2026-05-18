@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +40,7 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.foundation.shape.CircleShape
@@ -66,6 +68,7 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
     val context = LocalContext.current
     val isAdmin = remember { AuthManager.isCurrentUserAdmin() }
     var showEndChatDialog by remember { mutableStateOf(false) }
+    var showReopenChatDialog by remember { mutableStateOf(false) }
     var showFullScreenImage by remember { mutableStateOf<String?>(null) }
 
     var isChatClosed by remember { mutableStateOf(false) }
@@ -95,8 +98,10 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
         ChatManager.getConversationId(currentUserId, receiverId)
     }
 
-    DisposableEffect(chatId) {
-        if (chatId.isBlank()) return@DisposableEffect onDispose { }
+    DisposableEffect(currentUserId, receiverId, chatId) {
+        if (currentUserId.isBlank() || receiverId.isBlank() || chatId.isBlank()) {
+            return@DisposableEffect onDispose { }
+        }
         val listener = db.collection("closed_chats").document(chatId).addSnapshotListener { snapshot, e ->
             if (e != null) return@addSnapshotListener
             isChatClosed = snapshot?.getBoolean("closed") ?: false
@@ -164,10 +169,31 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(receiverName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.White)
-                        if (receiverEmail.isNotBlank()) {
-                            Text(receiverEmail, fontSize = 11.sp, color = CityTheme.GoldLight)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            if (receiverEmail.isNotBlank()) {
+                                Text(
+                                    text = receiverEmail,
+                                    fontSize = 11.sp,
+                                    color = CityTheme.White.copy(alpha = 0.8f)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "•",
+                                    fontSize = 11.sp,
+                                    color = CityTheme.White.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text(
+                                text = if (isChatClosed) "Closed Session" else "Secure Channel",
+                                fontSize = 11.sp,
+                                color = if (isChatClosed) Color(0xFFFF8A80) else CityTheme.GoldLight
+                            )
                         }
-                        Text(if (isChatClosed) "Closed Session" else "Secure Channel", fontSize = 11.sp, color = if (isChatClosed) CityTheme.Error else CityTheme.GoldLight)
                     }
                 },
                 navigationIcon = {
@@ -181,9 +207,15 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                     }
                 },
                 actions = {
-                    if (isAdmin && !isChatClosed) {
-                        IconButton(onClick = { showEndChatDialog = true }) {
-                            Icon(Icons.Default.Lock, contentDescription = "Conclude Session", tint = CityTheme.White)
+                    if (isAdmin) {
+                        if (!isChatClosed) {
+                            IconButton(onClick = { showEndChatDialog = true }) {
+                                Icon(Icons.Default.Lock, contentDescription = "Conclude Session", tint = CityTheme.White)
+                            }
+                        } else {
+                            IconButton(onClick = { showReopenChatDialog = true }) {
+                                Icon(Icons.Default.LockOpen, contentDescription = "Reopen Session", tint = CityTheme.White)
+                            }
                         }
                     }
                 },
@@ -388,6 +420,47 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                     },
                     dismissButton = {
                         TextButton(onClick = { showEndChatDialog = false }) { Text("Cancel", color = CityTheme.Green) }
+                    },
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            if (showReopenChatDialog) {
+                AlertDialog(
+                    onDismissRequest = { showReopenChatDialog = false },
+                    title = { Text("Reopen Chat Session?", fontWeight = FontWeight.Bold) },
+                    text = { Text("This will allow both you and the citizen to send messages in this thread again.") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val reopenMsg = Message(
+                                    senderId = currentUserId,
+                                    senderName = "Official Station Admin",
+                                    receiverId = receiverId,
+                                    receiverName = receiverName,
+                                    text = "The session has been reopened by an administrator.",
+                                    timestamp = Date()
+                                )
+                                ChatManager.sendMessage(
+                                    message = reopenMsg,
+                                    skipEmail = true,
+                                    onSuccess = { 
+                                        db.collection("closed_chats").document(chatId).set(mapOf("closed" to false))
+                                            .addOnSuccessListener {
+                                                showReopenChatDialog = false
+                                                Toast.makeText(context, "Session Reopened", Toast.LENGTH_SHORT).show()
+                                            }
+                                    },
+                                    onFailure = { 
+                                        Toast.makeText(context, "Failed to send reopening message", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                        ) { Text("Reopen", color = CityTheme.White) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showReopenChatDialog = false }) { Text("Cancel", color = CityTheme.Green) }
                     },
                     shape = RoundedCornerShape(16.dp)
                 )
