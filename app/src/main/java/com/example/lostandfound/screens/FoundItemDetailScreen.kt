@@ -468,7 +468,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                                         }
                                                         userClaim = userClaim?.copy(status = ClaimStatus.DISPUTED)
                                                         val adminName = if(userClaim!!.reviewerEmail.isNotBlank()) userClaim!!.reviewerEmail.substringBefore("@") else "Admin"
-                                                        navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName")
+                                                        navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName?email=${userClaim!!.reviewerEmail}")
                                                     }
                                             },
                                             modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -491,7 +491,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                                         OutlinedButton(
                                             onClick = { 
                                                 val adminName = if(userClaim!!.reviewerEmail.isNotBlank()) userClaim!!.reviewerEmail.substringBefore("@") else "Admin"
-                                                navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName") 
+                                                navController.navigate("chat/${userClaim!!.reviewedBy}/$adminName?email=${userClaim!!.reviewerEmail}") 
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(10.dp),

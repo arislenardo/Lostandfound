@@ -41,6 +41,7 @@ fun ConversationListScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
 
     var uniqueConversations by remember { mutableStateOf<List<Message>>(emptyList()) }
+    var userEmailsMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
     var currentPage by remember { mutableStateOf(0) }
 
@@ -58,8 +59,37 @@ fun ConversationListScreen(navController: NavController) {
                     conversationsMap[otherId] = msg
                 }
             }
-            uniqueConversations = conversationsMap.values.toList()
-            isLoading = false
+            val conversationsList = conversationsMap.values.toList()
+            
+            val otherUserIds = conversationsList.map { 
+                if (it.senderId == currentUserId) it.receiverId else it.senderId 
+            }.filter { it.isNotBlank() }.distinct()
+            
+            if (otherUserIds.isEmpty()) {
+                uniqueConversations = conversationsList
+                isLoading = false
+                return
+            }
+            
+            val tasks = otherUserIds.map { userId ->
+                db.collection("users").document(userId).get()
+            }
+            
+            com.google.android.gms.tasks.Tasks.whenAllComplete(tasks)
+                .addOnCompleteListener { _ ->
+                    val emailMap = mutableMapOf<String, String>()
+                    tasks.forEachIndexed { index, task ->
+                        if (task.isSuccessful) {
+                            val doc = task.result
+                            if (doc != null && doc.exists()) {
+                                emailMap[otherUserIds[index]] = doc.getString("email") ?: ""
+                            }
+                        }
+                    }
+                    userEmailsMap = emailMap
+                    uniqueConversations = conversationsList
+                    isLoading = false
+                }
         }
 
         val listener1 = db.collection("messages")
@@ -141,7 +171,9 @@ fun ConversationListScreen(navController: NavController) {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(pageItems) { lastMsg ->
-                            CityConversationItem(lastMsg, currentUserId, navController)
+                            val otherUserId = if (lastMsg.senderId == currentUserId) lastMsg.receiverId else lastMsg.senderId
+                            val email = userEmailsMap[otherUserId] ?: ""
+                            CityConversationItem(lastMsg, currentUserId, navController, email)
                         }
                     }
                     PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
@@ -156,7 +188,7 @@ fun ConversationListScreen(navController: NavController) {
  * latest message snippet, and an unread badge if applicable.
  */
 @Composable
-fun CityConversationItem(message: Message, currentUserId: String, navController: NavController) {
+fun CityConversationItem(message: Message, currentUserId: String, navController: NavController, otherUserEmail: String) {
     val otherUserId = if (message.senderId == currentUserId) message.receiverId else message.senderId
     val displayName = if (message.senderId != currentUserId) message.senderName else message.receiverName
     val isUnread = message.receiverId == currentUserId && !message.isRead
@@ -167,7 +199,7 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
         modifier = Modifier
             .fillMaxWidth()
             .shadow(3.dp, RoundedCornerShape(14.dp))
-            .clickable { navController.navigate("chat/$otherUserId/${displayName.ifBlank { "User" }}") },
+            .clickable { navController.navigate("chat/$otherUserId/${displayName.ifBlank { "User" }}?email=$otherUserEmail") },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CityTheme.White),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -206,6 +238,13 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
                     fontSize = 14.sp,
                     color = CityTheme.Brown
                 )
+                if (otherUserEmail.isNotBlank()) {
+                    Text(
+                        otherUserEmail,
+                        fontSize = 11.sp,
+                        color = CityTheme.Brown.copy(alpha = 0.6f)
+                    )
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${if (message.senderId == currentUserId) "You: " else ""}${message.text}",
@@ -230,4 +269,4 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
  */
 @Composable
 fun ConversationItem(message: Message, currentUserId: String, navController: NavController) =
-    CityConversationItem(message, currentUserId, navController)
+    CityConversationItem(message, currentUserId, navController, "")

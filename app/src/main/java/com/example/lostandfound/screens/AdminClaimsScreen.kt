@@ -3,6 +3,7 @@ package com.example.lostandfound.screens
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -51,6 +52,7 @@ fun AdminClaimsScreen(navController: NavController) {
     var selectedClaim by remember { mutableStateOf<Claim?>(null) }
     var pendingStatus by remember { mutableStateOf("") }
     var currentPage by remember { mutableStateOf(0) }
+    var sortOrder by remember { mutableStateOf("Newest") }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -169,14 +171,61 @@ fun AdminClaimsScreen(navController: NavController) {
                 }
             }
             else -> {
-                val totalPages = maxOf(1, (claims.size + 9) / 10)
+                val sortedClaims = remember(claims, sortOrder) {
+                    if (sortOrder == "Newest") {
+                        claims.sortedByDescending { it.timestamp }
+                    } else {
+                        claims.sortedBy { it.timestamp }
+                    }
+                }
+                val totalPages = maxOf(1, (sortedClaims.size + 9) / 10)
                 val safePage = currentPage.coerceIn(0, totalPages - 1)
-                val pageItems = claims.drop(safePage * 10).take(10)
+                val pageItems = sortedClaims.drop(safePage * 10).take(10)
                 val listState = rememberLazyListState()
                 
                 LaunchedEffect(safePage) { listState.scrollToItem(0) }
 
                 Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+                    // Sorting Selector Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Sort claims by:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = CityTheme.Brown.copy(alpha = 0.7f)
+                        )
+                        
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("Newest", "Oldest").forEach { option ->
+                                val isSelected = sortOrder == option
+                                Surface(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .border(1.dp, if (isSelected) CityTheme.Green else CityTheme.Brown.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                        .clickable { 
+                                            sortOrder = option 
+                                            currentPage = 0
+                                        },
+                                    color = if (isSelected) CityTheme.Green else CityTheme.White,
+                                ) {
+                                    Text(
+                                        text = option,
+                                        color = if (isSelected) CityTheme.White else CityTheme.Brown,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.weight(1f),
@@ -222,7 +271,7 @@ fun AdminClaimsScreen(navController: NavController) {
                                                 db.collection("messages").add(msg)
                                             }
                                             val userName = claim.userEmail.substringBefore("@")
-                                            navController.navigate("chat/${claim.userId}/${userName}")
+                                            navController.navigate("chat/${claim.userId}/${userName}?email=${claim.userEmail}")
                                         }
                                 }
                             )

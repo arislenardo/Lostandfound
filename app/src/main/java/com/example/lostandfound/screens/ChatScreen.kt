@@ -51,7 +51,7 @@ import com.example.lostandfound.components.FullScreenImageDialog
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(navController: NavController, receiverId: String, receiverName: String) {
+fun ChatScreen(navController: NavController, receiverId: String, receiverName: String, initialEmail: String = "") {
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
     val currentUserId = currentUser?.uid ?: ""
@@ -69,6 +69,18 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
     var showFullScreenImage by remember { mutableStateOf<String?>(null) }
 
     var isChatClosed by remember { mutableStateOf(false) }
+    var receiverEmail by remember { mutableStateOf(initialEmail) }
+
+    LaunchedEffect(receiverId) {
+        if (receiverId.isNotBlank()) {
+            db.collection("users").document(receiverId).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        receiverEmail = document.getString("email") ?: ""
+                    }
+                }
+        }
+    }
 
     showFullScreenImage?.let { url ->
         FullScreenImageDialog(url) { showFullScreenImage = null }
@@ -152,6 +164,9 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(receiverName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.White)
+                        if (receiverEmail.isNotBlank()) {
+                            Text(receiverEmail, fontSize = 11.sp, color = CityTheme.GoldLight)
+                        }
                         Text(if (isChatClosed) "Closed Session" else "Secure Channel", fontSize = 11.sp, color = if (isChatClosed) CityTheme.Error else CityTheme.GoldLight)
                     }
                 },

@@ -174,15 +174,17 @@ fun LostAndFoundApp() {
             PreventClickThrough { ConversationListScreen(navController = navController) }
         }
         composable(
-            route = "chat/{userId}/{userName}",
+            route = "chat/{userId}/{userName}?email={email}",
             arguments = listOf(
                 navArgument("userId") { type = NavType.StringType },
-                navArgument("userName") { type = NavType.StringType }
+                navArgument("userName") { type = NavType.StringType },
+                navArgument("email") { type = NavType.StringType; defaultValue = ""; nullable = true }
             )
         ) { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId") ?: ""
             val userName = backStackEntry.arguments?.getString("userName") ?: "User"
-            PreventClickThrough { ChatScreen(navController = navController, receiverId = userId, receiverName = userName) }
+            val email = backStackEntry.arguments?.getString("email") ?: ""
+            PreventClickThrough { ChatScreen(navController = navController, receiverId = userId, receiverName = userName, initialEmail = email) }
         }
         composable("admin_claims") {
             PreventClickThrough { AdminClaimsScreen(navController = navController) }
