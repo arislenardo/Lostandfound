@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.example.lostandfound.model.Message
 import com.example.lostandfound.ui.theme.CityTheme
 import com.google.firebase.auth.FirebaseAuth
@@ -28,6 +30,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+data class ParticipantInfo(
+    val email: String = "",
+    val profileImageUrl: String = ""
+)
 
 /**
  * Displays a list of unique chat conversations for the current user.
@@ -41,7 +48,7 @@ fun ConversationListScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
 
     var uniqueConversations by remember { mutableStateOf<List<Message>>(emptyList()) }
-    var userEmailsMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var userInfosMap by remember { mutableStateOf<Map<String, ParticipantInfo>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
     var currentPage by remember { mutableStateOf(0) }
 
@@ -77,16 +84,19 @@ fun ConversationListScreen(navController: NavController) {
             
             com.google.android.gms.tasks.Tasks.whenAllComplete(tasks)
                 .addOnCompleteListener { _ ->
-                    val emailMap = mutableMapOf<String, String>()
+                    val infoMap = mutableMapOf<String, ParticipantInfo>()
                     tasks.forEachIndexed { index, task ->
                         if (task.isSuccessful) {
                             val doc = task.result
                             if (doc != null && doc.exists()) {
-                                emailMap[otherUserIds[index]] = doc.getString("email") ?: ""
+                                infoMap[otherUserIds[index]] = ParticipantInfo(
+                                    email = doc.getString("email") ?: "",
+                                    profileImageUrl = doc.getString("profileImageUrl") ?: ""
+                                )
                             }
                         }
                     }
-                    userEmailsMap = emailMap
+                    userInfosMap = infoMap
                     uniqueConversations = conversationsList
                     isLoading = false
                 }
@@ -172,8 +182,8 @@ fun ConversationListScreen(navController: NavController) {
                     ) {
                         items(pageItems) { lastMsg ->
                             val otherUserId = if (lastMsg.senderId == currentUserId) lastMsg.receiverId else lastMsg.senderId
-                            val email = userEmailsMap[otherUserId] ?: ""
-                            CityConversationItem(lastMsg, currentUserId, navController, email)
+                            val info = userInfosMap[otherUserId] ?: ParticipantInfo()
+                            CityConversationItem(lastMsg, currentUserId, navController, info.email, info.profileImageUrl)
                         }
                     }
                     PaginationBar(currentPage = safePage, totalPages = totalPages, onPageSelected = { currentPage = it })
@@ -188,7 +198,13 @@ fun ConversationListScreen(navController: NavController) {
  * latest message snippet, and an unread badge if applicable.
  */
 @Composable
-fun CityConversationItem(message: Message, currentUserId: String, navController: NavController, otherUserEmail: String) {
+fun CityConversationItem(
+    message: Message, 
+    currentUserId: String, 
+    navController: NavController, 
+    otherUserEmail: String,
+    profileImageUrl: String
+) {
     val otherUserId = if (message.senderId == currentUserId) message.receiverId else message.senderId
     val displayName = if (message.senderId != currentUserId) message.senderName else message.receiverName
     val isUnread = message.receiverId == currentUserId && !message.isRead
@@ -210,14 +226,26 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
         ) {
             // Avatar circle
             Box {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(CityTheme.Green),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(initials, color = CityTheme.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                if (profileImageUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = profileImageUrl,
+                        contentDescription = "Avatar",
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(CityTheme.Brown.copy(alpha = 0.1f)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(CityTheme.Green),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(initials, color = CityTheme.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
                 }
                 if (isUnread) {
                     Box(
@@ -269,4 +297,4 @@ fun CityConversationItem(message: Message, currentUserId: String, navController:
  */
 @Composable
 fun ConversationItem(message: Message, currentUserId: String, navController: NavController) =
-    CityConversationItem(message, currentUserId, navController, "")
+    CityConversationItem(message, currentUserId, navController, "", "")
