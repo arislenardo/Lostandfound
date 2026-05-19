@@ -6,7 +6,7 @@ A comprehensive Android application for PNP Calasiao designed to help users repo
 
 You can quickly get started by downloading and installing the pre-built APK:
 
-1. **Download APK**: [📲 Download app](https://github.com/arislenardo/Lostandfound/releases/download/release/Balik-Calasiao.apk)
+1. **Download APK**: [📲 Download app](https://github.com/arislenardo/Lostandfound/releases/download/v1/Balik-Calasiao.apk)
 2. **Install**: Enable "Install from Unknown Sources" in your Android settings, then open the downloaded file.
 
 ---
