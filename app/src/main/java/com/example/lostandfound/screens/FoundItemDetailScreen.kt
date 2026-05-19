@@ -256,7 +256,7 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                         }
                     },
                     actions = {
-                        if (item != null && (item!!.userId == currentUserId || isAdmin)) {
+                        if (item != null && isAdmin) {
                             if (item!!.deleted) {
                                 IconButton(onClick = { showRestoreDialog = true }) {
                                     Icon(Icons.Default.Restore, "Restore", tint = CityTheme.GoldLight)
