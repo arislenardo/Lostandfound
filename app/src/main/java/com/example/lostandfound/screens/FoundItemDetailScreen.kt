@@ -256,18 +256,24 @@ fun FoundItemDetailScreen(navController: NavController, itemId: String, lostItem
                         }
                     },
                     actions = {
-                        if (item != null && isAdmin) {
+                        if (item != null) {
                             if (item!!.deleted) {
-                                IconButton(onClick = { showRestoreDialog = true }) {
-                                    Icon(Icons.Default.Restore, "Restore", tint = CityTheme.GoldLight)
+                                if (isAdmin) {
+                                    IconButton(onClick = { showRestoreDialog = true }) {
+                                        Icon(Icons.Default.Restore, "Restore", tint = CityTheme.GoldLight)
+                                    }
                                 }
                             } else if (isEditing) {
                                 IconButton(onClick = { updateItem() }) {
                                     Icon(Icons.Default.Check, "Save", tint = CityTheme.GoldLight)
                                 }
                             } else {
-                                IconButton(onClick = { isEditing = true }) { Icon(Icons.Default.Edit, "Edit", tint = CityTheme.White) }
-                                IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Default.Delete, "Delete", tint = CityTheme.GoldLight) }
+                                if (isAdmin) {
+                                    IconButton(onClick = { isEditing = true }) { Icon(Icons.Default.Edit, "Edit", tint = CityTheme.White) }
+                                }
+                                if (isAdmin || item!!.userId == currentUserId) {
+                                    IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Default.Delete, "Delete", tint = CityTheme.GoldLight) }
+                                }
                             }
                         }
                     },
