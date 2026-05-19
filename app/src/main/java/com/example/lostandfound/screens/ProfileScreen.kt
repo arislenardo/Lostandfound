@@ -71,6 +71,10 @@ fun ProfileScreen(navController: NavController) {
     var isSaving by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showNameLockedDialog by remember { mutableStateOf(false) }
+    var showPhotoOptionsDialog by remember { mutableStateOf(false) }
+
+    var originalPhone by remember { mutableStateOf("") }
+    var originalProfileImageUrl by remember { mutableStateOf("") }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -92,8 +96,10 @@ fun ProfileScreen(navController: NavController) {
                         name = document.getString("name") ?: currentUser.displayName ?: ""
                         val rawPhone = document.getString("phoneNumber") ?: currentUser.phoneNumber ?: ""
                         phone = if (rawPhone.startsWith("+63")) rawPhone.substring(3) else rawPhone
+                        originalPhone = phone
                         role = if (isAdmin) "Admin" else (document.getString("role") ?: "Resident")
                         profileImageUrl = document.getString("profileImageUrl") ?: currentUser.photoUrl?.toString() ?: ""
+                        originalProfileImageUrl = profileImageUrl
                         if (email.isBlank()) {
                             email = document.getString("email") ?: currentUser.email ?: ""
                         }
@@ -101,7 +107,10 @@ fun ProfileScreen(navController: NavController) {
                         name = currentUser.displayName ?: ""
                         val rawPhone = currentUser.phoneNumber ?: ""
                         phone = if (rawPhone.startsWith("+63")) rawPhone.substring(3) else rawPhone
+                        originalPhone = phone
                         role = if (isAdmin) "Admin" else "Resident"
+                        profileImageUrl = currentUser.photoUrl?.toString() ?: ""
+                        originalProfileImageUrl = profileImageUrl
                         if (email.isBlank()) {
                             email = currentUser.email ?: ""
                         }
@@ -132,24 +141,32 @@ fun ProfileScreen(navController: NavController) {
                 val cleanPhone = if (phone.startsWith("0")) phone.substring(1) else phone
                 val fullPhone = if (cleanPhone.startsWith("+63")) cleanPhone else "+63$cleanPhone"
 
-                val updates = mapOf(
+                val updates = mutableMapOf<String, Any>(
                     "phoneNumber" to fullPhone,
                     "profileImageUrl" to newImageUrl
                 )
+                if (role == "Admin") {
+                    updates["name"] = name
+                }
 
                 withContext(Dispatchers.Main) {
                     db.collection("users").document(currentUser.uid)
                         .set(updates, com.google.firebase.firestore.SetOptions.merge())
                         .addOnSuccessListener {
-                            // Sync photo with Firebase Auth profile (name is NOT changed)
+                            // Sync photo & name with Firebase Auth profile
+                            val profileUpdatesBuilder = UserProfileChangeRequest.Builder()
                             if (newImageUrl.isNotBlank()) {
-                                val profileUpdates = UserProfileChangeRequest.Builder()
-                                    .setPhotoUri(Uri.parse(newImageUrl))
-                                    .build()
-                                currentUser.updateProfile(profileUpdates)
+                                profileUpdatesBuilder.setPhotoUri(Uri.parse(newImageUrl))
                             }
+                            if (role == "Admin") {
+                                profileUpdatesBuilder.setDisplayName(name)
+                            }
+                            val profileUpdates = profileUpdatesBuilder.build()
+                            currentUser.updateProfile(profileUpdates)
 
                             profileImageUrl = newImageUrl
+                            originalProfileImageUrl = newImageUrl
+                            originalPhone = phone
                             isSaving = false
                             isEditing = false
                             selectedImageUri = null
@@ -198,6 +215,8 @@ fun ProfileScreen(navController: NavController) {
                                 onClick = {
                                     isEditing = false
                                     selectedImageUri = null
+                                    phone = originalPhone
+                                    profileImageUrl = originalProfileImageUrl
                                 }
                             ) {
                                 Icon(
@@ -266,7 +285,11 @@ fun ProfileScreen(navController: NavController) {
                         .border(4.dp, CityTheme.GoldLight, CircleShape)
                         .clickable {
                             isEditing = true
-                            imagePickerLauncher.launch("image/*")
+                            if (profileImageUrl.isNotBlank() || selectedImageUri != null) {
+                                showPhotoOptionsDialog = true
+                            } else {
+                                imagePickerLauncher.launch("image/*")
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -344,31 +367,34 @@ fun ProfileScreen(navController: NavController) {
                             fontSize = 16.sp
                         )
 
-                        // Name — locked, tap shows verification notice
+                        // Name — locked for regular users, tap shows verification notice. Editable for Admins in edit mode.
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable(
+                                    enabled = (role != "Admin"),
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
                                 ) { showNameLockedDialog = true }
                         ) {
                             OutlinedTextField(
                                 value = name,
-                                onValueChange = { },
+                                onValueChange = { if (isEditing && role == "Admin") name = it },
                                 label = { Text("Full Name") },
-                                enabled = false,
+                                enabled = isEditing && role == "Admin",
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = fieldColors(),
                                 shape = RoundedCornerShape(12.dp),
                                 singleLine = true,
                                 trailingIcon = {
-                                    Icon(
-                                        Icons.Default.Lock,
-                                        contentDescription = "Name is locked",
-                                        tint = CityTheme.Brown.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    if (role != "Admin") {
+                                        Icon(
+                                            Icons.Default.Lock,
+                                            contentDescription = "Name is locked",
+                                            tint = CityTheme.Brown.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -442,6 +468,8 @@ fun ProfileScreen(navController: NavController) {
                         onClick = {
                             isEditing = false
                             selectedImageUri = null
+                            phone = originalPhone
+                            profileImageUrl = originalProfileImageUrl
                         },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
@@ -519,7 +547,7 @@ fun ProfileScreen(navController: NavController) {
                         },
                         text = {
                             Text(
-                                "To update your full name, you must bring a valid ID (e.g. National ID or Birth Certificate) to the police station for verification.",
+                                "To update your full name, you must bring a valid ID, such as National ID or Birth Certificate, to the police station for verification.",
                                 color = CityTheme.Brown
                             )
                         },
@@ -529,6 +557,47 @@ fun ProfileScreen(navController: NavController) {
                                 colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
                             ) {
                                 Text("Got it", color = CityTheme.White)
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+
+                // Photo options dialog (Choose new or Remove current)
+                if (showPhotoOptionsDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showPhotoOptionsDialog = false },
+                        title = { Text("Profile Photo", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Select an option to update your profile photo:")
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        showPhotoOptionsDialog = false
+                                        imagePickerLauncher.launch("image/*")
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                                ) {
+                                    Text("Upload New Photo", color = CityTheme.White)
+                                }
+                                Button(
+                                    onClick = {
+                                        showPhotoOptionsDialog = false
+                                        selectedImageUri = null
+                                        profileImageUrl = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error.copy(alpha = 0.85f))
+                                ) {
+                                    Text("Remove Current Photo", color = CityTheme.White)
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showPhotoOptionsDialog = false }) {
+                                Text("Cancel", color = CityTheme.Brown)
                             }
                         },
                         shape = RoundedCornerShape(16.dp)

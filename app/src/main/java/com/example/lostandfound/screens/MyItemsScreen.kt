@@ -74,13 +74,18 @@ fun MyItemsScreen(navController: NavController) {
     }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val statuses = listOf("ALL", "SEARCHING", "IN PROGRESS", "RESOLVED", "ARCHIVED")
-    val descriptions = listOf(
+    val statuses = if (isAdmin) listOf("ALL", "SEARCHING", "IN PROGRESS", "RESOLVED", "ARCHIVED") else listOf("ALL", "SEARCHING", "IN PROGRESS", "RESOLVED")
+    val descriptions = if (isAdmin) listOf(
         "All your reported lost items.",
         "Active search reports with no matching found item yet.",
         "Reports linked to a found item with a claim in progress.",
         "Completed reports where the item was found.",
-        "Archived or soft-deleted reports."
+        "Archived reports."
+    ) else listOf(
+        "All your reported lost items.",
+        "Active search reports with no matching found item yet.",
+        "Reports linked to a found item with a claim in progress.",
+        "Completed reports where the item was found."
     )
 
     val filteredItems = remember(allItems, searchQuery, filterDateMillis, selectedTabIndex) {
@@ -94,7 +99,7 @@ fun MyItemsScreen(navController: NavController) {
         }
 
         // Tab Filtering
-        val selectedStatus = statuses[selectedTabIndex]
+        val selectedStatus = statuses.getOrNull(selectedTabIndex) ?: "ALL"
         list = list.filter { 
             if (selectedStatus == "ARCHIVED") {
                 it.deleted

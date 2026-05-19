@@ -78,7 +78,7 @@ fun LostItemsScreen(navController: NavController) {
         "Items currently at the station waiting for a claim.",
         "Items with ongoing claims or verification in progress.",
         "Record of items successfully returned to their owners.",
-        "Archived or soft-deleted items."
+        "Archived items."
     ) else listOf(
         "Complete inventory of all found items.",
         "Items currently at the station waiting for a claim.",
