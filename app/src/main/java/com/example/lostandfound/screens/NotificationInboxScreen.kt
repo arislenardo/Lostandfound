@@ -334,32 +334,37 @@ fun NotificationInboxScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("NOTIFICATIONS", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
-                        Text("Inbox", fontSize = 11.sp, color = CityTheme.GoldLight)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("NOTIFICATIONS", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                            Text("Inbox", fontSize = 11.sp, color = CityTheme.GoldLight)
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                actions = {
-                    if (notifications.isNotEmpty()) {
-                        IconButton(onClick = { showClearDialog = true }) {
-                            Icon(Icons.Default.DeleteSweep, "Clear All", tint = CityTheme.White)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    actions = {
+                        if (notifications.isNotEmpty()) {
+                            IconButton(onClick = { showClearDialog = true }) {
+                                Icon(Icons.Default.DeleteSweep, "Clear All", tint = CityTheme.White)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { paddingValues ->
         when {

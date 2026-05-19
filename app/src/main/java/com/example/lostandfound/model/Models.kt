@@ -22,7 +22,8 @@ data class FoundItem(
     val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
     val status: String = ItemStatus.FOUND,
     val claimedLostItemId: String = "",
-    val createdAt: Date? = null
+    val createdAt: Date? = null,
+    val deleted: Boolean = false  // Soft-delete flag — true means archived/hidden
 )
 
 /**
@@ -43,7 +44,8 @@ data class LostItem(
     val imageVector: List<Double> = emptyList(), // MobileNetV3 embedding for visual matching
     val status: String = ItemStatus.LOST,
     val claimedFoundItemId: String = "",
-    val createdAt: Date? = null
+    val createdAt: Date? = null,
+    val deleted: Boolean = false  // Soft-delete flag — true means archived/hidden
 )
 
 // --- PROFILE MODELS ---

@@ -36,6 +36,7 @@ class HomeViewModel : ViewModel() {
     var uiState = androidx.compose.runtime.mutableStateOf(HomeUiState())
         private set
 
+    private var userListener: ListenerRegistration? = null
     private var msgListener: ListenerRegistration? = null
     private var matchListener: ListenerRegistration? = null
     private var claimListener: ListenerRegistration? = null
@@ -64,23 +65,25 @@ class HomeViewModel : ViewModel() {
             uiState.value = uiState.value.copy(isAdmin = isAdmin)
 
             if (currentUser != null) {
-                db.collection("users").document(currentUser.uid).get()
-                    .addOnSuccessListener { doc ->
-                        val name = doc.getString("name")
-                        val photoUrl = doc.getString("profileImageUrl") ?: currentUser.photoUrl?.toString() ?: ""
-                        
-                        // Prioritize Admin status if AuthManager says so
-                        val documentRole = if (isAdmin) "Administrator" else (doc.getString("role") ?: "Resident")
-                        
-                        var updatedState = uiState.value.copy(
-                            profileImageUrl = photoUrl,
-                            role = documentRole
-                        )
-                        if (!name.isNullOrBlank()) {
-                            val first = name.split(" ").firstOrNull() ?: name
-                            updatedState = updatedState.copy(firstName = first)
+                userListener = db.collection("users").document(currentUser.uid)
+                    .addSnapshotListener { doc, _ ->
+                        if (doc != null && doc.exists()) {
+                            val name = doc.getString("name")
+                            val photoUrl = doc.getString("profileImageUrl") ?: currentUser.photoUrl?.toString() ?: ""
+                            
+                            // Prioritize Admin status if AuthManager says so
+                            val documentRole = if (isAdmin) "Administrator" else (doc.getString("role") ?: "Resident")
+                            
+                            var updatedState = uiState.value.copy(
+                                profileImageUrl = photoUrl,
+                                role = documentRole
+                            )
+                            if (!name.isNullOrBlank()) {
+                                val first = name.split(" ").firstOrNull() ?: name
+                                updatedState = updatedState.copy(firstName = first)
+                            }
+                            uiState.value = updatedState
                         }
-                        uiState.value = updatedState
                     }
             }
         }
@@ -156,6 +159,7 @@ class HomeViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        userListener?.remove()
         msgListener?.remove()
         matchListener?.remove()
         claimListener?.remove()

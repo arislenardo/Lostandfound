@@ -114,12 +114,13 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
     }
 
     /**
-     * Deletes the current lost item from Firestore.
-     * If the user is an admin, it also logs this deletion as an AdminAction for auditing purposes.
+     * Soft-deletes the lost item by setting deleted = true in Firestore.
+     * The document remains in the database but will be hidden from all UI queries.
+     * If the user is an admin, this action is also logged in admin_history for auditing.
      */
     fun deleteItem() {
         if (item == null) return
-        db.collection("lost_items").document(item!!.id).delete()
+        db.collection("lost_items").document(item!!.id).update("deleted", true)
             .addOnSuccessListener {
                 if (isAdmin) {
                     val currentUser = FirebaseAuth.getInstance().currentUser
@@ -132,70 +133,103 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                     )
                     db.collection("admin_history").add(action).addOnSuccessListener { doc ->
                         db.collection("admin_history").document(doc.id).update("id", doc.id)
-                    }.addOnFailureListener { e ->
-                        Toast.makeText(context, "Audit error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
-                Toast.makeText(context, "Item deleted", Toast.LENGTH_SHORT).show()
-                navController.popBackStack()
+                Toast.makeText(context, "Item archived", Toast.LENGTH_SHORT).show()
+                item = item!!.copy(deleted = true)
             }
-            .addOnFailureListener { e -> Toast.makeText(context, "Error deleting: ${e.message}", Toast.LENGTH_LONG).show() }
+            .addOnFailureListener { e -> Toast.makeText(context, "Error archiving: ${e.message}", Toast.LENGTH_LONG).show() }
+    }
+
+    fun restoreItem() {
+        if (item == null) return
+        db.collection("lost_items").document(item!!.id).update("deleted", false)
+            .addOnSuccessListener {
+                Toast.makeText(context, "Item restored", Toast.LENGTH_SHORT).show()
+                item = item!!.copy(deleted = false)
+            }
+            .addOnFailureListener { e -> Toast.makeText(context, "Error restoring: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             shape = RoundedCornerShape(16.dp),
-            title = { Text("Delete Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
-            text = { Text("Are you sure? This cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
+            title = { Text("Archive Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+            text = { Text("This will archive the report. The data is kept safely in the database.", color = CityTheme.Brown.copy(0.7f)) },
             confirmButton = {
                 TextButton(onClick = { deleteItem(); showDeleteDialog = false }) {
-                    Text("Delete", color = CityTheme.Error, fontWeight = FontWeight.Bold)
+                    Text("Archive", color = CityTheme.Error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", color = CityTheme.Green) } }
         )
     }
 
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false },
+            shape = RoundedCornerShape(16.dp),
+            title = { Text("Restore Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+            text = { Text("This will restore the report and make it visible again.", color = CityTheme.Brown.copy(0.7f)) },
+            confirmButton = {
+                TextButton(onClick = { restoreItem(); showRestoreDialog = false }) {
+                    Text("Restore", color = CityTheme.Green, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showRestoreDialog = false }) { Text("Cancel", color = CityTheme.Brown) } }
+        )
+    }
+
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (isEditing) "EDIT LOST ITEM" else "LOST ITEM DETAILS", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
-                        Text("Ref: #${itemId.take(8)}", fontSize = 11.sp, color = CityTheme.GoldLight)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (isEditing) isEditing = false
-                        else if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (isEditing) "EDIT LOST ITEM" else "LOST ITEM DETAILS", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                            Text("Ref: #${itemId.take(8)}", fontSize = 11.sp, color = CityTheme.GoldLight)
                         }
-                    }) {
-                        Icon(if (isEditing) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                actions = {
-                    if (item != null && (item!!.userId == currentUserId || isAdmin)) {
-                        if (isEditing) {
-                            IconButton(onClick = { updateItem() }) {
-                                Icon(Icons.Default.Check, "Save", tint = CityTheme.GoldLight)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (isEditing) isEditing = false
+                            else if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
                             }
-                        } else {
-                            IconButton(onClick = { isEditing = true }) {
-                                Icon(Icons.Default.Edit, "Edit", tint = CityTheme.White)
-                            }
-                            IconButton(onClick = { showDeleteDialog = true }) {
-                                Icon(Icons.Default.Delete, "Delete", tint = CityTheme.GoldLight)
+                        }) {
+                            Icon(if (isEditing) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                        }
+                    },
+                    actions = {
+                        if (item != null && (item!!.userId == currentUserId || isAdmin)) {
+                            if (item!!.deleted) {
+                                IconButton(onClick = { showRestoreDialog = true }) {
+                                    Icon(Icons.Default.Restore, "Restore", tint = CityTheme.GoldLight)
+                                }
+                            } else if (isEditing) {
+                                IconButton(onClick = { updateItem() }) {
+                                    Icon(Icons.Default.Check, "Save", tint = CityTheme.GoldLight)
+                                }
+                            } else {
+                                IconButton(onClick = { isEditing = true }) {
+                                    Icon(Icons.Default.Edit, "Edit", tint = CityTheme.White)
+                                }
+                                IconButton(onClick = { showDeleteDialog = true }) {
+                                    Icon(Icons.Default.Delete, "Delete", tint = CityTheme.GoldLight)
+                                }
                             }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { paddingValues ->
         when {
@@ -208,14 +242,15 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
             ) {
                 // Status Badge
                 if (!isEditing) {
-                    val (statusLabel, statusColor) = when (item!!.status) {
-                        "APPROVED"      -> "APPROVED (Pick up at Station)" to CityTheme.Green
-                        "REJECTED"      -> "REJECTED" to CityTheme.Error
-                        "DISPUTED"      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
-                        "RESOLVED"      -> "RESOLVED" to CityTheme.Green
-                        "FOUND"         -> "RESOLVED" to CityTheme.Green
-                        "RETURNED"      -> "RESOLVED" to CityTheme.Green
-                        "CLAIM_PENDING" -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
+                    val (statusLabel, statusColor) = when {
+                        item!!.deleted  -> "ARCHIVED" to CityTheme.Brown.copy(0.5f)
+                        item!!.status == "APPROVED"      -> "APPROVED (Pick up at Station)" to CityTheme.Green
+                        item!!.status == "REJECTED"      -> "REJECTED" to CityTheme.Error
+                        item!!.status == "DISPUTED"      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
+                        item!!.status == "RESOLVED"      -> "RESOLVED" to CityTheme.Green
+                        item!!.status == "FOUND"         -> "RESOLVED" to CityTheme.Green
+                        item!!.status == "RETURNED"      -> "RESOLVED" to CityTheme.Green
+                        item!!.status == "CLAIM_PENDING" -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
                         else            -> "SEARCHING" to CityTheme.Gold
                     }
                     
@@ -288,6 +323,7 @@ fun ItemDetailScreen(navController: NavController, itemId: String) {
                         DetailRow("Category", item!!.category)
                         DetailRow("Date Lost", try { dateFormat.format(item!!.dateLost) } catch (e: Exception) { "Unknown" })
                         DetailRow("Reported At", try { item!!.createdAt?.let { dateTimeFormat.format(it) } ?: "N/A" } catch (e: Exception) { "Unknown" })
+                        DetailRow("Document ID", item!!.id)
                     }
 
                     // Location & description

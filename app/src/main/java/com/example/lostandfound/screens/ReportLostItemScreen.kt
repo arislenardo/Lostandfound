@@ -403,7 +403,7 @@ fun ReportLostItemScreen(navController: NavController) {
         isSubmitting = true
         coroutineScope.launch {
             try {
-                val imageUrl = selectedImageUri?.let { uploadImageToStorage(it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "lost_items") }
+                val imageUrl = selectedImageUri?.let { uploadImageToStorage(context, it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "lost_items") }
                 withContext(Dispatchers.Main) {
                     saveToFirestore(imageUrl, onComplete)
                 }
@@ -423,8 +423,8 @@ fun ReportLostItemScreen(navController: NavController) {
             db.collection("found_items").get().addOnSuccessListener { result ->
                 val allFoundItems = result.documents.mapNotNull { doc ->
                     val obj = doc.toObject(FoundItem::class.java)?.copy(id = doc.id)
-                    // Match against anything that isn't already returned or claimed
-                    if (obj != null && (obj.status.equals(ItemStatus.FOUND, ignoreCase = true) || obj.status.equals(ClaimStatus.FOUND, ignoreCase = true))) obj else null
+                    // Match against anything that isn't already returned, claimed, or deleted
+                    if (obj != null && !obj.deleted && (obj.status.equals(ItemStatus.FOUND, ignoreCase = true) || obj.status.equals(ClaimStatus.FOUND, ignoreCase = true))) obj else null
                 }
                 scope.launch {
                     val matches = withContext(Dispatchers.Default) {
@@ -733,20 +733,25 @@ fun ReportLostItemScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("REPORT LOST ITEM", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
-                        Text("Submit a Lost Item", fontSize = 11.sp, color = CityTheme.GoldLight)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_content_description), tint = CityTheme.White)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("REPORT LOST ITEM", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                            Text("Submit a Lost Item", fontSize = 11.sp, color = CityTheme.GoldLight)
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { if (navController.previousBackStackEntry != null && navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_content_description), tint = CityTheme.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { padding ->
         LazyColumn(

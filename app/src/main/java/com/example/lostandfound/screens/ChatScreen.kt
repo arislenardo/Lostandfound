@@ -165,62 +165,67 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(receiverName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.White)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            if (receiverEmail.isNotBlank()) {
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(receiverName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = CityTheme.White)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                if (receiverEmail.isNotBlank()) {
+                                    Text(
+                                        text = receiverEmail,
+                                        fontSize = 11.sp,
+                                        color = CityTheme.White.copy(alpha = 0.8f)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "•",
+                                        fontSize = 11.sp,
+                                        color = CityTheme.White.copy(alpha = 0.5f)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
                                 Text(
-                                    text = receiverEmail,
+                                    text = if (isChatClosed) "Closed Session" else "Secure Channel",
                                     fontSize = 11.sp,
-                                    color = CityTheme.White.copy(alpha = 0.8f)
+                                    color = if (isChatClosed) Color(0xFFFF8A80) else CityTheme.GoldLight
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "•",
-                                    fontSize = 11.sp,
-                                    color = CityTheme.White.copy(alpha = 0.5f)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                            }
-                            Text(
-                                text = if (isChatClosed) "Closed Session" else "Secure Channel",
-                                fontSize = 11.sp,
-                                color = if (isChatClosed) Color(0xFFFF8A80) else CityTheme.GoldLight
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
-                        }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                actions = {
-                    if (isAdmin) {
-                        if (!isChatClosed) {
-                            IconButton(onClick = { showEndChatDialog = true }) {
-                                Icon(Icons.Default.Lock, contentDescription = "Conclude Session", tint = CityTheme.White)
-                            }
-                        } else {
-                            IconButton(onClick = { showReopenChatDialog = true }) {
-                                Icon(Icons.Default.LockOpen, contentDescription = "Reopen Session", tint = CityTheme.White)
                             }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                        }
+                    },
+                    actions = {
+                        if (isAdmin) {
+                            if (!isChatClosed) {
+                                IconButton(onClick = { showEndChatDialog = true }) {
+                                    Icon(Icons.Default.Lock, contentDescription = "Conclude Session", tint = CityTheme.White)
+                                }
+                            } else {
+                                IconButton(onClick = { showReopenChatDialog = true }) {
+                                    Icon(Icons.Default.LockOpen, contentDescription = "Reopen Session", tint = CityTheme.White)
+                                }
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -321,7 +326,7 @@ fun ChatScreen(navController: NavController, receiverId: String, receiverName: S
                                                 coroutineScope.launch {
                                                     try {
                                                         val url = selectedImageUri?.let {
-                                                            uploadImageToStorage(it, userId = currentUserId, userEmail = auth.currentUser?.email ?: "", itemType = "chat")
+                                                            uploadImageToStorage(context, it, userId = currentUserId, userEmail = auth.currentUser?.email ?: "", itemType = "chat")
                                                         } ?: ""
                                                         
                                                         val msg = Message(

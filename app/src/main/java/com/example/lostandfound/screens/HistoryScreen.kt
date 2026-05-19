@@ -53,24 +53,29 @@ fun HistoryScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "ADMIN HISTORY",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp,
-                            color = CityTheme.White
-                        )
-                        Text(
-                            "Audit Logs",
-                            fontSize = 11.sp,
-                            color = CityTheme.GoldLight
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "ADMIN HISTORY",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                color = CityTheme.White
+                            )
+                            Text(
+                                "Audit Logs",
+                                fontSize = 11.sp,
+                                color = CityTheme.GoldLight
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         },
         bottomBar = {
             AppBottomNavigation(

@@ -395,7 +395,7 @@ fun ReportItemScreen(navController: NavController) {
         isSubmitting = true
         coroutineScope.launch {
             try {
-                val imageUrl = capturedImageUri?.let { uploadImageToStorage(it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "found_items") }
+                val imageUrl = capturedImageUri?.let { uploadImageToStorage(context, it, userId = currentUser?.uid ?: "anonymous", userEmail = currentUser?.email ?: "", itemType = "found_items") }
                 withContext(Dispatchers.Main) {
                     saveToFirestore(imageUrl)
                 }
@@ -424,7 +424,7 @@ fun ReportItemScreen(navController: NavController) {
                             db.collection("lost_items").get().addOnSuccessListener { result ->
                                 val allLostItems: List<LostItem> = result.documents.mapNotNull { doc ->
                                     val obj = doc.toObject(LostItem::class.java)?.copy(id = doc.id)
-                                    if (obj != null && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED && obj.status != ClaimStatus.RETURNED && obj.status != ClaimStatus.RESOLVED) obj else null
+                                    if (obj != null && !obj.deleted && obj.status != ClaimStatus.FOUND && obj.status != ClaimStatus.APPROVED && obj.status != ClaimStatus.RETURNED && obj.status != ClaimStatus.RESOLVED) obj else null
                                 }
                                 coroutineScope.launch {
                                     val matches = withContext(Dispatchers.Default) { findLostMatches(itemName, description, category, imageVector, allLostItems) }
@@ -529,25 +529,30 @@ fun ReportItemScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("REPORT FOUND ITEM", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
-                        Text("Submit a Found Item", fontSize = 11.sp, color = CityTheme.GoldLight)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("REPORT FOUND ITEM", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                            Text("Submit a Found Item", fontSize = 11.sp, color = CityTheme.GoldLight)
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { padding ->
         LazyColumn(

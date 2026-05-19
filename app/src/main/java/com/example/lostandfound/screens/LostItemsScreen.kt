@@ -72,8 +72,14 @@ fun LostItemsScreen(navController: NavController) {
     }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val statuses = listOf("ALL", "AVAILABLE", "PENDING", "RETURNED")
-    val descriptions = listOf(
+    val statuses = if (isAdmin) listOf("ALL", "AVAILABLE", "PENDING", "RETURNED", "ARCHIVED") else listOf("ALL", "AVAILABLE", "PENDING", "RETURNED")
+    val descriptions = if (isAdmin) listOf(
+        "Complete inventory of all found items.",
+        "Items currently at the station waiting for a claim.",
+        "Items with ongoing claims or verification in progress.",
+        "Record of items successfully returned to their owners.",
+        "Archived or soft-deleted items."
+    ) else listOf(
         "Complete inventory of all found items.",
         "Items currently at the station waiting for a claim.",
         "Items with ongoing claims or verification in progress.",
@@ -91,11 +97,16 @@ fun LostItemsScreen(navController: NavController) {
         }
 
         // Tab Filtering
-        val selectedStatus = statuses[selectedTabIndex]
-        if (selectedStatus != "ALL") {
-            list = list.filter { 
+        val selectedStatus = statuses.getOrNull(selectedTabIndex) ?: "ALL"
+        list = list.filter {
+            if (selectedStatus == "ARCHIVED") {
+                it.deleted
+            } else if (it.deleted) {
+                false
+            } else {
                 val statusUp = it.status.uppercase()
                 when(selectedStatus) {
+                    "ALL" -> true
                     "AVAILABLE" -> statusUp == "FOUND" || statusUp == "ACTIVE"
                     "PENDING"   -> statusUp == "CLAIMED"
                     "RETURNED"  -> statusUp == "RETURNED"
@@ -116,25 +127,30 @@ fun LostItemsScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("FOUND ITEMS DATABASE", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
-                        Text("Official Station Records", fontSize = 11.sp, color = CityTheme.GoldLight)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("FOUND ITEMS DATABASE", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White)
+                            Text("Official Station Records", fontSize = 11.sp, color = CityTheme.GoldLight)
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -342,6 +358,23 @@ fun FoundItemCard(item: FoundItem, navController: NavController, isAdmin: Boolea
                     Spacer(Modifier.height(6.dp))
                     Text(item.description, fontSize = 12.sp, maxLines = 2, color = CityTheme.Brown.copy(0.7f))
                     Text("By: ${item.email}", fontSize = 10.sp, color = CityTheme.Brown.copy(0.4f))
+                }
+                
+                if (item.deleted) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = CityTheme.Brown.copy(0.12f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(CityTheme.Brown.copy(0.5f)))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("ARCHIVED", color = CityTheme.Brown.copy(0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
             if (isAdmin) {

@@ -76,12 +76,14 @@ fun BrowseByCategoryScreen(navController: NavController) {
         val counts = mutableMapOf<String, Int>()
         db.collection("lost_items").get().addOnSuccessListener { snap ->
             for (doc in snap.documents) {
+                if (doc.getBoolean("deleted") == true) continue
                 val cat = doc.getString("category") ?: "Others"
                 counts[cat] = (counts[cat] ?: 0) + 1
             }
             // Also fetch found items
             db.collection("found_items").get().addOnSuccessListener { snap2 ->
                 for (doc in snap2.documents) {
+                    if (doc.getBoolean("deleted") == true) continue
                     val cat = doc.getString("category") ?: "Others"
                     counts[cat] = (counts[cat] ?: 0) + 1
                 }
@@ -95,36 +97,41 @@ fun BrowseByCategoryScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            selectedCategory ?: "Browse by Category",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 17.sp,
-                            color = CityTheme.White
-                        )
-                        Text(
-                            if (selectedCategory == null) "All item categories" else "Lost & Found records",
-                            fontSize = 11.sp,
-                            color = CityTheme.GoldLight
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (selectedCategory != null) {
-                            selectedCategory = null
-                        } else if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                selectedCategory ?: "Browse by Category",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 17.sp,
+                                color = CityTheme.White
+                            )
+                            Text(
+                                if (selectedCategory == null) "All item categories" else "Lost & Found records",
+                                fontSize = 11.sp,
+                                color = CityTheme.GoldLight
+                            )
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (selectedCategory != null) {
+                                selectedCategory = null
+                            } else if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { padding ->
         if (selectedCategory == null) {
@@ -252,12 +259,14 @@ private fun CategoryItemsList(
         db.collection("lost_items").whereEqualTo("category", category).get()
             .addOnSuccessListener { snap ->
                 lostItems = snap.documents.mapNotNull { it.toObject(LostItem::class.java)?.copy(id = it.id) }
+                    .filter { !it.deleted }
                     .sortedByDescending { it.dateLost.time }
                 isLoading = false
             }
         db.collection("found_items").whereEqualTo("category", category).get()
             .addOnSuccessListener { snap ->
                 foundItems = snap.documents.mapNotNull { it.toObject(FoundItem::class.java)?.copy(id = it.id) }
+                    .filter { !it.deleted }
                     .sortedByDescending { it.dateFound.time }
                 isLoading = false
             }

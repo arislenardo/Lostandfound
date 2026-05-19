@@ -74,12 +74,13 @@ fun MyItemsScreen(navController: NavController) {
     }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val statuses = listOf("ALL", "SEARCHING", "IN PROGRESS", "RESOLVED")
+    val statuses = listOf("ALL", "SEARCHING", "IN PROGRESS", "RESOLVED", "ARCHIVED")
     val descriptions = listOf(
         "All your reported lost items.",
         "Active search reports with no matching found item yet.",
         "Reports linked to a found item with a claim in progress.",
-        "Completed reports where the item was found."
+        "Completed reports where the item was found.",
+        "Archived or soft-deleted reports."
     )
 
     val filteredItems = remember(allItems, searchQuery, filterDateMillis, selectedTabIndex) {
@@ -94,9 +95,14 @@ fun MyItemsScreen(navController: NavController) {
 
         // Tab Filtering
         val selectedStatus = statuses[selectedTabIndex]
-        if (selectedStatus != "ALL") {
-            list = list.filter { 
+        list = list.filter { 
+            if (selectedStatus == "ARCHIVED") {
+                it.deleted
+            } else if (it.deleted) {
+                false // hide archived items from other tabs
+            } else {
                 when(selectedStatus) {
+                    "ALL" -> true
                     "SEARCHING" -> it.status != ClaimStatus.FOUND && 
                                   it.status != ClaimStatus.RETURNED &&
                                   it.status != ClaimStatus.RESOLVED &&
@@ -126,31 +132,36 @@ fun MyItemsScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            if (isAdmin) "LOST ITEMS DATABASE" else "MY REPORTED ITEMS",
-                            fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White
-                        )
-                        Text(
-                            if (isAdmin) "Official Station Records" else "Your Lost Item Reports",
-                            fontSize = 11.sp, color = CityTheme.GoldLight
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (navController.previousBackStackEntry != null &&
-                            navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
-                            navController.popBackStack()
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                if (isAdmin) "LOST ITEMS DATABASE" else "MY REPORTED ITEMS",
+                                fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = CityTheme.White
+                            )
+                            Text(
+                                if (isAdmin) "Official Station Records" else "Your Lost Item Reports",
+                                fontSize = 11.sp, color = CityTheme.GoldLight
+                            )
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (navController.previousBackStackEntry != null &&
+                                navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                navController.popBackStack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = CityTheme.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -285,12 +296,13 @@ fun MyItemsScreen(navController: NavController) {
             AlertDialog(
                 onDismissRequest = { showFoundConfirm = false },
                 shape = RoundedCornerShape(16.dp),
-                title = { Text("Delete Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
-                text = { Text("Are you sure? This will delete the '${itemToMarkFound!!.name}' report. If you found your item, this is the correct action to take. This action cannot be undone.", color = CityTheme.Brown.copy(0.7f)) },
+                title = { Text("Archive Report?", fontWeight = FontWeight.Bold, color = CityTheme.Brown) },
+                text = { Text("This will archive the '${itemToMarkFound!!.name}' report and hide it from active listings. If you found your item, this is the correct action. The data is kept safely in the database.", color = CityTheme.Brown.copy(0.7f)) },
                 confirmButton = {
                     Button(
                         onClick = {
-                            db.collection("lost_items").document(itemToMarkFound!!.id).delete()
+                            db.collection("lost_items").document(itemToMarkFound!!.id)
+                                .update("deleted", true)
                                 .addOnSuccessListener {
                                 // Archive any active claims related to this manually resolved item
                                 db.collection("claims")
@@ -305,14 +317,14 @@ fun MyItemsScreen(navController: NavController) {
                                         if (!snap.isEmpty) batch.commit()
                                     }
 
-                                Toast.makeText(context, "Report Deleted! Active claims archived.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Report Archived! Active claims archived.", Toast.LENGTH_SHORT).show()
                                 // Update local state by removing from list
                                 allItems = allItems.filter { it.id != itemToMarkFound!!.id }
                             }
                             showFoundConfirm = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Error)
-                    ) { Text("Yes, Delete Report") }
+                    ) { Text("Yes, Archive Report") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showFoundConfirm = false }) {
@@ -379,14 +391,15 @@ fun LostItemCard(item: LostItem, navController: NavController, isAdmin: Boolean,
                 }
 
                 Spacer(Modifier.height(8.dp))
-                val (statusLabel, statusColor) = when (item.status) {
-                    ClaimStatus.APPROVED      -> "APPROVED (Pick up at Station)" to CityTheme.Green
-                    ClaimStatus.REJECTED      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
-                    ClaimStatus.DISPUTED      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
-                    ClaimStatus.FOUND         -> "RESOLVED" to CityTheme.Green
-                    ClaimStatus.RETURNED      -> "RESOLVED" to CityTheme.Green
-                    ClaimStatus.RESOLVED      -> "RESOLVED" to CityTheme.Green
-                    ClaimStatus.CLAIM_PENDING -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
+                val (statusLabel, statusColor) = when {
+                    item.deleted -> "ARCHIVED" to CityTheme.Brown.copy(0.5f)
+                    item.status == ClaimStatus.APPROVED      -> "APPROVED (Pick up at Station)" to CityTheme.Green
+                    item.status == ClaimStatus.REJECTED      -> "REJECTED (Tap to Dispute)" to CityTheme.Error
+                    item.status == ClaimStatus.DISPUTED      -> "DISPUTED (Reviewing Appeal)" to CityTheme.Gold
+                    item.status == ClaimStatus.FOUND         -> "RESOLVED" to CityTheme.Green
+                    item.status == ClaimStatus.RETURNED      -> "RESOLVED" to CityTheme.Green
+                    item.status == ClaimStatus.RESOLVED      -> "RESOLVED" to CityTheme.Green
+                    item.status == ClaimStatus.CLAIM_PENDING -> "CLAIM SUBMITTED (Reviewing)" to CityTheme.Gold
                     else                      -> {
                         val s = (item.status ?: "").uppercase()
                         if (s.isBlank() || s == "PENDING" || s == "SEARCHING") {

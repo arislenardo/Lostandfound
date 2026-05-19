@@ -7,13 +7,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
@@ -44,8 +48,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 
 /**
  * Displays the current user's profile information.
- * Allows users to edit their display name, phone number, and profile image.
- * Also provides an option to sign out of the application.
+ * Users can freely edit their phone number and profile picture.
+ * Name and email are locked — tapping the name field shows a verification notice.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,12 +65,13 @@ fun ProfileScreen(navController: NavController) {
     var role by remember { mutableStateOf("Resident") }
     var profileImageUrl by remember { mutableStateOf(currentUser?.photoUrl?.toString() ?: "") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    
+
     var isEditing by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
-    
+    var showNameLockedDialog by remember { mutableStateOf(false) }
+
     val coroutineScope = rememberCoroutineScope()
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -80,7 +85,7 @@ fun ProfileScreen(navController: NavController) {
     LaunchedEffect(currentUser) {
         if (currentUser != null) {
             val isAdmin = com.example.lostandfound.data.AuthManager.isCurrentUserAdmin()
-            
+
             db.collection("users").document(currentUser.uid).get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
@@ -104,7 +109,7 @@ fun ProfileScreen(navController: NavController) {
                     isLoading = false
                 }
                 .addOnFailureListener {
-                    role = if (isAdmin) "Admin" else "Resident"
+                    role = if (com.example.lostandfound.data.AuthManager.isCurrentUserAdmin()) "Admin" else "Resident"
                     isLoading = false
                     Toast.makeText(context, "Failed to load profile", Toast.LENGTH_SHORT).show()
                 }
@@ -116,35 +121,33 @@ fun ProfileScreen(navController: NavController) {
     fun saveProfile() {
         if (currentUser == null) return
         isSaving = true
-        
+
         coroutineScope.launch {
             try {
                 var newImageUrl = profileImageUrl
                 if (selectedImageUri != null) {
-                    newImageUrl = uploadImageToStorage(selectedImageUri!!, currentUser.uid, currentUser.email ?: "anonymous", "profiles")
+                    newImageUrl = uploadImageToStorage(context, selectedImageUri!!, currentUser.uid, currentUser.email ?: "anonymous", "profiles")
                 }
-                
-                // Consistency check for phone number
+
                 val cleanPhone = if (phone.startsWith("0")) phone.substring(1) else phone
                 val fullPhone = if (cleanPhone.startsWith("+63")) cleanPhone else "+63$cleanPhone"
-                
+
                 val updates = mapOf(
-                    "name" to name,
                     "phoneNumber" to fullPhone,
                     "profileImageUrl" to newImageUrl
                 )
-                
+
                 withContext(Dispatchers.Main) {
                     db.collection("users").document(currentUser.uid)
                         .set(updates, com.google.firebase.firestore.SetOptions.merge())
                         .addOnSuccessListener {
-                            // Sync name and photo with Firebase Auth profile
-                            val profileUpdates = UserProfileChangeRequest.Builder()
-                                .setDisplayName(name)
+                            // Sync photo with Firebase Auth profile (name is NOT changed)
                             if (newImageUrl.isNotBlank()) {
-                                profileUpdates.setPhotoUri(Uri.parse(newImageUrl))
+                                val profileUpdates = UserProfileChangeRequest.Builder()
+                                    .setPhotoUri(Uri.parse(newImageUrl))
+                                    .build()
+                                currentUser.updateProfile(profileUpdates)
                             }
-                            currentUser.updateProfile(profileUpdates.build())
 
                             profileImageUrl = newImageUrl
                             isSaving = false
@@ -169,39 +172,69 @@ fun ProfileScreen(navController: NavController) {
     Scaffold(
         containerColor = CityTheme.Cream,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "MY PROFILE",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp,
-                            color = CityTheme.White
-                        )
-                        Text(
-                            "Account Settings",
-                            fontSize = 11.sp,
-                            color = CityTheme.GoldLight
-                        )
-                    }
-                },
-                actions = {
-                    if (isEditing) {
-                        IconButton(onClick = { saveProfile() }, enabled = !isSaving) {
-                            if (isSaving) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = CityTheme.GoldLight)
-                            } else {
-                                Icon(Icons.Default.Save, contentDescription = "Save", tint = CityTheme.GoldLight)
+            Surface(
+                shadowElevation = 8.dp,
+                color = CityTheme.Green
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "MY PROFILE",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                color = CityTheme.White
+                            )
+                            Text(
+                                "Account Settings",
+                                fontSize = 11.sp,
+                                color = CityTheme.GoldLight
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        if (isEditing) {
+                            IconButton(
+                                onClick = {
+                                    isEditing = false
+                                    selectedImageUri = null
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancel Editing",
+                                    tint = CityTheme.White
+                                )
                             }
                         }
-                    } else {
-                        IconButton(onClick = { isEditing = true }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit Profile", tint = CityTheme.White)
+                    },
+                    actions = {
+                        if (isEditing) {
+                            IconButton(
+                                onClick = { saveProfile() },
+                                enabled = !isSaving
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Save,
+                                    contentDescription = "Save Changes",
+                                    tint = CityTheme.GoldLight
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = { isEditing = true }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Profile",
+                                    tint = CityTheme.White
+                                )
+                            }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = CityTheme.Green)
-            )
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
         },
         bottomBar = {
             AppBottomNavigation(
@@ -224,14 +257,17 @@ fun ProfileScreen(navController: NavController) {
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile Avatar Placeholder
+                // Profile Avatar — tappable to change picture
                 Box(
                     modifier = Modifier
                         .size(100.dp)
                         .clip(CircleShape)
                         .background(CityTheme.Green)
                         .border(4.dp, CityTheme.GoldLight, CircleShape)
-                        .clickable { if (isEditing) imagePickerLauncher.launch("image/*") },
+                        .clickable {
+                            isEditing = true
+                            imagePickerLauncher.launch("image/*")
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (selectedImageUri != null || profileImageUrl.isNotBlank()) {
@@ -252,12 +288,20 @@ fun ProfileScreen(navController: NavController) {
                             modifier = Modifier.size(60.dp)
                         )
                     }
+                    // Camera overlay — shown only in edit mode
                     if (isEditing) {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(CityTheme.Brown.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(CityTheme.Brown.copy(alpha = 0.35f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = "Change Image", tint = CityTheme.White)
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "Change Photo",
+                                tint = CityTheme.White,
+                                modifier = Modifier.size(28.dp)
+                            )
                         }
                     }
                 }
@@ -300,17 +344,36 @@ fun ProfileScreen(navController: NavController) {
                             fontSize = 16.sp
                         )
 
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { if (isEditing) name = it },
-                            label = { Text("Full Name") },
-                            enabled = isEditing,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = fieldColors(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
+                        // Name — locked, tap shows verification notice
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { showNameLockedDialog = true }
+                        ) {
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { },
+                                label = { Text("Full Name") },
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = fieldColors(),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = "Name is locked",
+                                        tint = CityTheme.Brown.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            )
+                        }
 
+                        // Phone — editable in edit mode
                         OutlinedTextField(
                             value = phone,
                             onValueChange = { if (isEditing) phone = it.filter { c -> c.isDigit() } },
@@ -324,26 +387,61 @@ fun ProfileScreen(navController: NavController) {
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone)
                         )
 
+                        // Email — always locked
                         OutlinedTextField(
                             value = email,
-                            onValueChange = { }, // Email is not editable here
+                            onValueChange = { },
                             label = { Text("Email Address") },
-                            enabled = false, // Always disabled
+                            enabled = false,
                             modifier = Modifier.fillMaxWidth(),
                             colors = fieldColors(),
                             shape = RoundedCornerShape(12.dp),
-                            singleLine = true
+                            singleLine = true,
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Lock,
+                                    contentDescription = "Email is locked",
+                                    tint = CityTheme.Brown.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 if (isEditing) {
+                    // Save Changes button
+                    Button(
+                        onClick = { saveProfile() },
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                color = CityTheme.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Default.Save, contentDescription = null, tint = CityTheme.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Save Changes", fontWeight = FontWeight.Bold, color = CityTheme.White)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Cancel button
                     Button(
                         onClick = {
                             isEditing = false
-                            selectedImageUri = null // Reset image changes
+                            selectedImageUri = null
                         },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
@@ -356,12 +454,16 @@ fun ProfileScreen(navController: NavController) {
                         onClick = { showSignOutConfirm = true },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(width = 1.dp, brush = androidx.compose.ui.graphics.SolidColor(CityTheme.Error.copy(0.4f)))
+                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                            width = 1.dp,
+                            brush = androidx.compose.ui.graphics.SolidColor(CityTheme.Error.copy(0.4f))
+                        )
                     ) {
                         Text("Sign Out", fontWeight = FontWeight.Bold, color = CityTheme.Error)
                     }
                 }
 
+                // Sign-out confirmation dialog
                 if (showSignOutConfirm) {
                     AlertDialog(
                         onDismissRequest = { showSignOutConfirm = false },
@@ -372,7 +474,7 @@ fun ProfileScreen(navController: NavController) {
                                 onClick = {
                                     val user = auth.currentUser
                                     val googleSignInClient = GoogleSignIn.getClient(context, GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                    
+
                                     val performSignOut = {
                                         googleSignInClient.signOut().addOnCompleteListener {
                                             auth.signOut()
@@ -399,6 +501,35 @@ fun ProfileScreen(navController: NavController) {
                         },
                         dismissButton = {
                             TextButton(onClick = { showSignOutConfirm = false }) { Text("Cancel", color = CityTheme.Brown) }
+                        },
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+
+                // Name-locked dialog — shown when user taps the name field
+                if (showNameLockedDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showNameLockedDialog = false },
+                        title = {
+                            Text(
+                                "Verification Required",
+                                fontWeight = FontWeight.Bold,
+                                color = CityTheme.Green
+                            )
+                        },
+                        text = {
+                            Text(
+                                "To update your full name, you must bring a valid ID (e.g. National ID or Birth Certificate) to the police station for verification.",
+                                color = CityTheme.Brown
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = { showNameLockedDialog = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = CityTheme.Green)
+                            ) {
+                                Text("Got it", color = CityTheme.White)
+                            }
                         },
                         shape = RoundedCornerShape(16.dp)
                     )

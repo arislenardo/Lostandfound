@@ -115,6 +115,12 @@ fun LoginScreen(navController: NavController) {
     var isLoginMode  by remember { mutableStateOf(true) }
     var selectedTab  by remember { mutableIntStateOf(0) }   // 0 = Email, 1 = Phone
 
+    // Forgot password dialog state
+    var showForgotPassword  by remember { mutableStateOf(false) }
+    var forgotEmail         by remember { mutableStateOf("") }
+    var forgotEmailSent     by remember { mutableStateOf(false) }
+    var forgotEmailError    by remember { mutableStateOf("") }
+
     // Phone auth state
     var verificationId     by remember { mutableStateOf("") }
     var otpCode            by remember { mutableStateOf("") }
@@ -390,6 +396,25 @@ fun LoginScreen(navController: NavController) {
                                 shape = RoundedCornerShape(12.dp),
                                 leadingIcon = { Icon(Icons.Filled.Lock, null) }
                             )
+                            // Forgot password link — only shown in login mode on the email tab
+                            if (isLoginMode) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Forgot Password?",
+                                    fontSize = 12.sp,
+                                    color = CityGreen,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .align(Alignment.End)
+                                        .clickable {
+                                            forgotEmail = email  // Pre-fill with whatever was typed
+                                            forgotEmailSent = false
+                                            forgotEmailError = ""
+                                            showForgotPassword = true
+                                        }
+                                        .padding(vertical = 4.dp)
+                                )
+                            }
                             if (!isLoginMode) {
                                 Spacer(Modifier.height(14.dp))
                                 OutlinedTextField(
@@ -1087,6 +1112,105 @@ fun LoginScreen(navController: NavController) {
             }
 
             Spacer(Modifier.height(32.dp))
+        }
+
+        // ── Forgot Password Dialog ─────────────────────────────────────────
+        if (showForgotPassword) {
+            AlertDialog(
+                onDismissRequest = { showForgotPassword = false },
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                title = {
+                    Text(
+                        "Reset Password",
+                        fontWeight = FontWeight.Bold,
+                        color = CityBrown,
+                        fontSize = 18.sp
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            "Enter the email address associated with your account and we'll send you a link to reset your password.",
+                            fontSize = 13.sp,
+                            color = CityBrown.copy(alpha = 0.65f),
+                            lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = forgotEmail,
+                            onValueChange = { forgotEmail = it; forgotEmailError = "" },
+                            label = { Text("Email Address") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor    = CityGreen,
+                                unfocusedBorderColor  = CityBrown.copy(alpha = 0.35f),
+                                focusedLabelColor     = CityGreen,
+                                cursorColor           = CityGreen,
+                                focusedTextColor      = CityBrown,
+                                unfocusedTextColor    = CityBrown,
+                            ),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            leadingIcon = { Icon(Icons.Filled.Email, null, tint = CityGreen) }
+                        )
+                        if (forgotEmailError.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(forgotEmailError, color = CityError, fontSize = 12.sp)
+                        }
+                        if (forgotEmailSent) {
+                            Spacer(Modifier.height(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.CheckCircle, null, tint = CityGreen, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "Reset link sent successfully!",
+                                        fontSize = 13.sp,
+                                        color = CityGreen,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Please check your inbox. If you don't receive it within a few minutes, make sure to check your spam or junk folder.",
+                                    fontSize = 12.sp,
+                                    color = CityBrown.copy(alpha = 0.7f),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        enabled = !forgotEmailSent,
+                        onClick = {
+                            val trimmed = forgotEmail.trim()
+                            if (trimmed.isBlank()) {
+                                forgotEmailError = "Please enter your email address."
+                            } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()) {
+                                forgotEmailError = "Please enter a valid email address."
+                            } else {
+                                auth.sendPasswordResetEmail(trimmed)
+                                    .addOnSuccessListener { forgotEmailSent = true }
+                                    .addOnFailureListener { e ->
+                                        forgotEmailError = e.localizedMessage ?: "Failed to send reset email."
+                                    }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CityGreen),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+                    ) {
+                        Text(if (forgotEmailSent) "Email Sent ✓" else "Send Reset Link")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showForgotPassword = false }) {
+                        Text(if (forgotEmailSent) "Done" else "Cancel", color = CityBrown.copy(alpha = 0.6f))
+                    }
+                }
+            )
         }
     }
 }
