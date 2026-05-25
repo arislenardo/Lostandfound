@@ -180,7 +180,11 @@ fun LoginScreen(navController: NavController) {
                     }
                     .addOnFailureListener { e ->
                         isLoading = false
-                        errorMessage   = context.getString(R.string.error_google_sign_in, e.localizedMessage)
+                        if (e is FirebaseAuthInvalidUserException && e.errorCode == "ERROR_USER_DISABLED") {
+                            errorMessage = "Account has been deactivated due to inactivity, verify ID in Calasiao Police Station to reactivate"
+                        } else {
+                            errorMessage = context.getString(R.string.error_google_sign_in, e.localizedMessage)
+                        }
                         isErrorVisible = true
                     }
             } catch (e: ApiException) {
@@ -793,20 +797,25 @@ fun LoginScreen(navController: NavController) {
                         )
                     }
 
-                    // ── Error message ──────────────────────────────────────
+                    // ── Error / Success message ─────────────────────────────
                     if (isErrorVisible) {
                         Spacer(Modifier.height(8.dp))
+                        val isSuccessMessage = errorMessage.contains("successful", ignoreCase = true)
+                        val bgColor = if (isSuccessMessage) CityGreen.copy(alpha = 0.08f) else CityError.copy(alpha = 0.08f)
+                        val tintColor = if (isSuccessMessage) CityGreen else CityError
+                        val icon = if (isSuccessMessage) Icons.Filled.CheckCircle else Icons.Filled.Warning
+                        
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(CityError.copy(alpha = 0.08f))
+                                .background(bgColor)
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Filled.Warning, null, tint = CityError, modifier = Modifier.size(16.dp))
+                            Icon(icon, null, tint = tintColor, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(errorMessage, color = CityError, fontSize = 12.sp)
+                            Text(errorMessage, color = tintColor, fontSize = 12.sp)
                         }
                     }
 
@@ -829,6 +838,21 @@ fun LoginScreen(navController: NavController) {
                                     } else {
                                         scope.launch {
                                             try {
+                                                if (profileEmail.isNotBlank()) {
+                                                    val emailQuery = FirebaseFirestore.getInstance().collection("users")
+                                                        .whereEqualTo("email", profileEmail)
+                                                        .get()
+                                                        .await()
+                                                    val user = auth.currentUser!!
+                                                    // Allow if the email matches their own auth email or if it's completely unique
+                                                    val isOwnEmail = profileEmail.equals(user.email, ignoreCase = true)
+                                                    if (!emailQuery.isEmpty && !isOwnEmail) {
+                                                        isLoading = false
+                                                        errorMessage = "This email is already associated with another account."
+                                                        isErrorVisible = true
+                                                        return@launch
+                                                    }
+                                                }
                                                 val user = auth.currentUser!!
                                                 val profileUpdates = UserProfileChangeRequest.Builder()
                                                     .setDisplayName(profileName).build()
@@ -861,10 +885,23 @@ fun LoginScreen(navController: NavController) {
                                                     if (user != null) {
                                                         val docMap = FirebaseFirestore.getInstance().collection("users").document(user.uid).get().await()
                                                         if (docMap.exists() && docMap.getString("role") != null) {
+                                                            if (!isLoginMode) {
+                                                                auth.signOut()
+                                                                isLoading = false; errorMessage = "This phone number is already registered. Please login instead."; isErrorVisible = true
+                                                                return@launch
+                                                            }
                                                             AuthManager.refreshAdminStatus()
                                                             syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                                         } else {
                                                             if (!isLoginMode && profileName.isNotBlank() && address.isNotBlank()) {
+                                                                if (profileEmail.isNotBlank()) {
+                                                                    val emailQuery = FirebaseFirestore.getInstance().collection("users").whereEqualTo("email", profileEmail).get().await()
+                                                                    if (!emailQuery.isEmpty) {
+                                                                        auth.signOut()
+                                                                        isLoading = false; errorMessage = "This email is already associated with another account."; isErrorVisible = true
+                                                                        return@launch
+                                                                    }
+                                                                }
                                                                 val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(profileName).build()
                                                                 user.updateProfile(profileUpdates).await()
                                                                 val userData = hashMapOf(
@@ -879,6 +916,11 @@ fun LoginScreen(navController: NavController) {
                                                                 AuthManager.refreshAdminStatus()
                                                                 syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                                             } else {
+                                                                if (isLoginMode) {
+                                                                    auth.signOut()
+                                                                    isLoading = false; errorMessage = "Account not found. Please create an account."; isErrorVisible = true
+                                                                    return@launch
+                                                                }
                                                                 isLoading = false; isProfileSetupStep = true
                                                                 profileName = user.displayName ?: ""
                                                                 profileEmail = user.email ?: ""
@@ -889,8 +931,14 @@ fun LoginScreen(navController: NavController) {
                                                     }
                                                 }
                                             }
-                                            .addOnFailureListener {
-                                                isLoading = false; errorMessage = context.getString(R.string.error_invalid_code); isErrorVisible = true
+                                            .addOnFailureListener { e ->
+                                                isLoading = false
+                                                if (e is FirebaseAuthInvalidUserException && e.errorCode == "ERROR_USER_DISABLED") {
+                                                    errorMessage = "Account has been deactivated due to inactivity, verify ID in Calasiao Police Station to reactivate"
+                                                } else {
+                                                    errorMessage = context.getString(R.string.error_invalid_code)
+                                                }
+                                                isErrorVisible = true
                                             }
                                     } else {
                                         isLoading = false; errorMessage = "Please enter the code."; isErrorVisible = true
@@ -903,6 +951,14 @@ fun LoginScreen(navController: NavController) {
                                                     scope.launch {
                                                         val user = auth.currentUser
                                                         if (user != null) {
+                                                            if (!user.isEmailVerified) {
+                                                                user.sendEmailVerification()
+                                                                auth.signOut()
+                                                                isLoading = false
+                                                                errorMessage = "Please verify your email address before logging in. A new verification link has been sent to your inbox."
+                                                                isErrorVisible = true
+                                                                return@launch
+                                                            }
                                                             val userData = hashMapOf(
                                                                 "uid" to user.uid,
                                                                 "email" to (user.email ?: "")
@@ -917,7 +973,13 @@ fun LoginScreen(navController: NavController) {
                                                     }
                                                 }
                                                 .addOnFailureListener { e ->
-                                                    isLoading = false; errorMessage = context.getString(R.string.error_login_failed, e.localizedMessage); isErrorVisible = true
+                                                    isLoading = false
+                                                    if (e is FirebaseAuthInvalidUserException && e.errorCode == "ERROR_USER_DISABLED") {
+                                                        errorMessage = "Account has been deactivated due to inactivity, verify ID in Calasiao Police Station to reactivate"
+                                                    } else {
+                                                        errorMessage = context.getString(R.string.error_login_failed, e.localizedMessage)
+                                                    }
+                                                    isErrorVisible = true
                                                 }
                                         } else {
                                             if (name.isBlank()) {
@@ -945,9 +1007,22 @@ fun LoginScreen(navController: NavController) {
                                                                         .collection("users").document(user.uid)
                                                                         .set(userData, com.google.firebase.firestore.SetOptions.merge())
                                                                         .await()
+                                                                    
+                                                                    user.sendEmailVerification()
+                                                                        .addOnCompleteListener { task ->
+                                                                            auth.signOut()
+                                                                            isLoading = false
+                                                                            if (task.isSuccessful) {
+                                                                                errorMessage = "Registration successful! A verification link has been sent to your email. Please verify before logging in."
+                                                                                isLoginMode = true
+                                                                            } else {
+                                                                                errorMessage = "Account created, but failed to send verification email: ${task.exception?.localizedMessage}. Please try logging in to re-send."
+                                                                            }
+                                                                            isErrorVisible = true
+                                                                        }
+                                                                } else {
+                                                                    isLoading = false
                                                                 }
-                                                                AuthManager.refreshAdminStatus()
-                                                                syncFCMTokenAndNavigate(auth, navController) { isLoading = false }
                                                             }
                                                         }
                                                     }
@@ -970,59 +1045,104 @@ fun LoginScreen(navController: NavController) {
                                                 return@Button
                                             }
                                         }
-                                        val activity = context.findActivity()
-                                        if (activity == null) {
-                                            isLoading = false; errorMessage = "Could not find activity context"; isErrorVisible = true
-                                        } else {
-                                            val cleanPhone     = if (phone.startsWith("0")) phone.substring(1) else phone
-                                            val fullPhoneNumber = "+63$cleanPhone"
-                                            val options = PhoneAuthOptions.newBuilder(auth)
-                                                .setPhoneNumber(fullPhoneNumber)
-                                                .setTimeout(60L, TimeUnit.SECONDS)
-                                                .setActivity(activity)
-                                                .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-                                                    override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                                                        auth.signInWithCredential(credential).addOnSuccessListener {
-                                                            scope.launch {
-                                                                val user = auth.currentUser
-                                                                if (user != null) {
-                                                                    val userData = if (!isLoginMode && profileName.isNotBlank() && address.isNotBlank()) {
-                                                                        val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(profileName).build()
-                                                                        user.updateProfile(profileUpdates).await()
-                                                                        hashMapOf(
-                                                                            "uid" to user.uid,
-                                                                            "name"  to profileName,
-                                                                            "email" to profileEmail,
-                                                                            "phoneNumber" to (user.phoneNumber ?: fullPhoneNumber),
-                                                                            "role"  to role,
-                                                                            "address" to address
-                                                                        )
-                                                                    } else {
-                                                                        hashMapOf(
-                                                                            "uid" to user.uid,
-                                                                            "phoneNumber" to (user.phoneNumber ?: fullPhoneNumber)
-                                                                        )
+                                        val cleanPhone     = if (phone.startsWith("0")) phone.substring(1) else phone
+                                        val fullPhoneNumber = "+63$cleanPhone"
+                                        
+                                        scope.launch {
+                                            if (!isLoginMode) {
+                                                try {
+                                                    val encodedPhone = java.net.URLEncoder.encode(fullPhoneNumber, "UTF-8")
+                                                    val urlStr = "https://us-central1-lostandfound-e1333.cloudfunctions.net/checkUserExists?phone=$encodedPhone"
+                                                    val exists = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        val connection = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
+                                                        connection.requestMethod = "GET"
+                                                        if (connection.responseCode == 200) {
+                                                            connection.inputStream.bufferedReader().use { it.readText() }.contains("\"exists\":true")
+                                                        } else false
+                                                    }
+                                                    if (exists) {
+                                                        isLoading = false
+                                                        errorMessage = "This phone number is already registered. Please login instead."
+                                                        isErrorVisible = true
+                                                        return@launch
+                                                    }
+                                                } catch (e: Exception) {
+                                                    // Network error or function not deployed yet
+                                                }
+                                            }
+                                            val activity = context.findActivity()
+                                            if (activity == null) {
+                                                isLoading = false; errorMessage = "Could not find activity context"; isErrorVisible = true
+                                            } else {
+                                                val options = PhoneAuthOptions.newBuilder(auth)
+                                                    .setPhoneNumber(fullPhoneNumber)
+                                                    .setTimeout(60L, TimeUnit.SECONDS)
+                                                    .setActivity(activity)
+                                                    .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                                                        override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                                                            auth.signInWithCredential(credential).addOnSuccessListener {
+                                                                scope.launch {
+                                                                    val user = auth.currentUser
+                                                                    if (user != null) {
+                                                                        val docMap = FirebaseFirestore.getInstance().collection("users").document(user.uid).get().await()
+                                                                        if (docMap.exists() && docMap.getString("role") != null) {
+                                                                            if (!isLoginMode) {
+                                                                                auth.signOut()
+                                                                                isLoading = false; errorMessage = "This phone number is already registered. Please login instead."; isErrorVisible = true
+                                                                                return@launch
+                                                                            }
+                                                                            AuthManager.refreshAdminStatus()
+                                                                            isLoading = false
+                                                                            navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                                        } else {
+                                                                            if (!isLoginMode && profileName.isNotBlank() && address.isNotBlank()) {
+                                                                                if (profileEmail.isNotBlank()) {
+                                                                                    val emailQuery = FirebaseFirestore.getInstance().collection("users").whereEqualTo("email", profileEmail).get().await()
+                                                                                    if (!emailQuery.isEmpty) {
+                                                                                        auth.signOut()
+                                                                                        isLoading = false; errorMessage = "This email is already associated with another account."; isErrorVisible = true
+                                                                                        return@launch
+                                                                                    }
+                                                                                }
+                                                                                val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(profileName).build()
+                                                                                user.updateProfile(profileUpdates).await()
+                                                                                val userData = hashMapOf(
+                                                                                    "uid" to user.uid,
+                                                                                    "name"  to profileName,
+                                                                                    "email" to profileEmail,
+                                                                                    "phoneNumber" to (user.phoneNumber ?: fullPhoneNumber),
+                                                                                    "role"  to role,
+                                                                                    "address" to address
+                                                                                )
+                                                                                FirebaseFirestore.getInstance().collection("users").document(user.uid).set(userData).await()
+                                                                                AuthManager.refreshAdminStatus()
+                                                                                isLoading = false
+                                                                                navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                                                                            } else {
+                                                                                if (isLoginMode) {
+                                                                                    auth.signOut()
+                                                                                    isLoading = false; errorMessage = "Account not found. Please create an account."; isErrorVisible = true
+                                                                                    return@launch
+                                                                                }
+                                                                                isLoading = false; isProfileSetupStep = true
+                                                                                profileName = user.displayName ?: ""
+                                                                                profileEmail = user.email ?: ""
+                                                                            }
+                                                                        }
                                                                     }
-                                                                    FirebaseFirestore.getInstance()
-                                                                        .collection("users").document(user.uid)
-                                                                        .set(userData, com.google.firebase.firestore.SetOptions.merge())
-                                                                        .await()
                                                                 }
-                                                                AuthManager.refreshAdminStatus()
-                                                                isLoading = false
-                                                                navController.navigate("home") { popUpTo("login") { inclusive = true } }
                                                             }
                                                         }
-                                                    }
-                                                    override fun onVerificationFailed(e: FirebaseException) {
-                                                        isLoading = false; errorMessage = context.getString(R.string.error_verification_failed, e.message); isErrorVisible = true
-                                                    }
-                                                    override fun onCodeSent(vId: String, token: PhoneAuthProvider.ForceResendingToken) {
-                                                        isLoading = false; verificationId = vId; isCodeSent = true
-                                                    }
-                                                })
-                                                .build()
-                                            PhoneAuthProvider.verifyPhoneNumber(options)
+                                                        override fun onVerificationFailed(e: FirebaseException) {
+                                                            isLoading = false; errorMessage = context.getString(R.string.error_verification_failed, e.message); isErrorVisible = true
+                                                        }
+                                                        override fun onCodeSent(vId: String, token: PhoneAuthProvider.ForceResendingToken) {
+                                                            isLoading = false; verificationId = vId; isCodeSent = true
+                                                        }
+                                                    })
+                                                    .build()
+                                                PhoneAuthProvider.verifyPhoneNumber(options)
+                                            }
                                         }
                                     } else {
                                         isLoading = false; errorMessage = "Please enter a phone number."; isErrorVisible = true
