@@ -65,14 +65,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Install App Check debug provider for local debug builds to bypass Play Integrity.
-        // This is automatically excluded from release builds by debugImplementation in build.gradle.kts.
+        // Temporarily disabled DebugAppCheckProviderFactory so Play Integrity can run on physical devices
+        /*
         if (BuildConfig.DEBUG) {
             val firebaseAppCheck = FirebaseAppCheck.getInstance()
             firebaseAppCheck.installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
             )
         }
+        */
         
         try {
             val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
